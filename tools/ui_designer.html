@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JK BMS Monitor — UI/UX Pro Max Studio (Redmi Note 5)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600;700&family=Fira+Sans:wght@400;500;600;700&display=swap');
+
+  :root {
+    --studio-bg: #070b12;
+    --studio-panel: #0f1623;
+    --studio-border: #1e293b;
+    --studio-text: #f1f5f9;
+    --studio-muted: #94a3b8;
+
+    /* UI/UX Pro Max Tokens: Electric Cyan + Eco Green */
+    --accent: #22d3ee;
+    --accent-strong: #0891b2;
+    --accent-soft: rgba(34, 211, 238, 0.14);
+    --charge: #16a34a;
+    --charge-bright: #22c55e;
+    --discharge: #f59e0b;
+    --danger: #ef4444;
+    --info: #22d3ee;
+
+    /* Default: Dark Mode OLED (#000000 / #121212, contrast >= 7:1) */
+    --app-bg: #000000;
+    --app-card: #121212;
+    --app-card-elevated: #181c24;
+    --app-card-border: #262d3d;
+    --app-text: #ffffff;
+    --app-muted: #b8c4d4;
+    --font-scale: 1;
+    --radius: 14px;
+    --font-ui: 'Fira Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-num: 'Fira Code', ui-monospace, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    background: var(--studio-bg);
+    color: var(--studio-text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  svg.ico { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  svg.ico-sm { width: 12px; height: 12px; }
+  svg.ico-lg { width: 18px; height: 18px; }
+
+  .topbar {
+    height: 54px;
+    background: var(--studio-panel);
+    border-bottom: 1px solid var(--studio-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .badge-ro {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.14);
+    color: #22d3ee;
+    border: 1px solid rgba(34, 211, 238, 0.4);
+    letter-spacing: 0.5px;
+  }
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    min-height: 36px;
+    background: #172133;
+    color: var(--studio-text);
+    border: 1px solid var(--studio-border);
+    border-radius: 8px;
+    padding: 6px 11px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+  }
+  .btn:hover { background: #223049; }
+  .btn.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000000;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+
+  .workspace {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr 305px;
+    min-height: 0;
+  }
+
+  .sidebar {
+    background: var(--studio-panel);
+    border-right: 1px solid var(--studio-border);
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sidebar.right {
+    border-right: none;
+    border-left: 1px solid var(--studio-border);
+  }
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--studio-muted);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .control-box {
+    background: rgba(7, 11, 18, 0.72);
+    border: 1px solid var(--studio-border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .mode-btn {
+    min-height: 48px;
+    padding: 8px 9px;
+    border-radius: 10px;
+    background: #141d2e;
+    border: 1px solid var(--studio-border);
+    color: var(--studio-text);
+    font-size: 11.5px;
+    font-family: var(--font-ui);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .mode-btn small { display: block; color: var(--studio-muted); font-size: 10px; margin-top: 2px; }
+  .mode-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .mode-btn.active small { color: var(--accent); }
+
+  .row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+  }
+  select, input[type="range"] { accent-color: var(--accent); }
+  select {
+    background: #141d2e;
+    color: var(--studio-text);
+    border: 1px solid var(--studio-border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  /* Center Stage */
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: auto;
+    background: radial-gradient(circle at 50% 22%, #111b2d 0%, #05080f 75%);
+    gap: 10px;
+  }
+  .stage-caption {
+    font-size: 12px;
+    color: var(--studio-muted);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .phone-shell {
+    background: #020305;
+    border: 3px solid #2b374d;
+    border-radius: 26px;
+    padding: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72);
+    transition: width 0.25s ease, height 0.25s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .phone-screen {
+    flex: 1;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+  }
+  .phone-screen.landscape { flex-direction: row; }
+
+  /* Maps Split Pane */
+  .maps-pane {
+    background: linear-gradient(155deg, #172334 0%, #101b29 60%, #152536 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px 12px;
+    color: #f1f5f9;
+    user-select: none;
+  }
+  .maps-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(148,163,184,0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148,163,184,0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .maps-route { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .maps-banner {
+    position: relative;
+    z-index: 2;
+    background: #0f766e;
+    color: #ffffff;
+    padding: 7px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .maps-footer {
+    position: relative;
+    z-index: 2;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(148,163,184,0.25);
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .split-handle {
+    background: #05070b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .split-handle.h { height: 10px; width: 100%; }
+  .split-handle.v { width: 10px; height: 100%; }
+  .split-pill { background: #64748b; border-radius: 999px; }
+  .split-handle.h .split-pill { width: 36px; height: 4px; }
+  .split-handle.v .split-pill { width: 4px; height: 36px; }
+
+  /* App Pane (Theme-aware with >=4.5:1 contrast) */
+  .app-pane {
+    background: var(--app-bg);
+    color: var(--app-text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .app-pane.theme-light {
+    --app-bg: #ecfeff;
+    --app-card: #ffffff;
+    --app-card-elevated: #f8fafc;
+    --app-card-border: #a5f3fc;
+    --app-text: #0f172a;
+    --app-muted: #334155;
+  }
+  .app-pane.theme-slate {
+    --app-bg: #0a0e1a;
+    --app-card: #131b2e;
+    --app-card-elevated: #19233b;
+    --app-card-border: #2a3958;
+    --app-text: #f8fafc;
+    --app-muted: #cbd5e1;
+  }
+
+  .app-header {
+    min-height: 40px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--app-card-border);
+    background: var(--app-card);
+    flex-shrink: 0;
+    gap: 8px;
+  }
+  .app-header-left {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 0;
+  }
+  .dot-live {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--charge-bright);
+    box-shadow: 0 0 8px var(--charge-bright);
+    flex-shrink: 0;
+  }
+  .pill-mini {
+    min-height: 28px;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--app-card-elevated);
+    border: 1px solid var(--app-card-border);
+    color: var(--app-muted);
+    font-weight: 600;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .pill-mini.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .app-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    min-height: 0;
+  }
+  .app-scroll::-webkit-scrollbar { width: 4px; }
+  .app-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.3); border-radius: 4px; }
+
+  .widget-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .widget-grid.inapp-50 { grid-template-columns: 1fr 1fr; }
+  .widget-grid.inapp-70 { grid-template-columns: 3.5fr 6.5fr; }
+
+  .widget-card {
+    background: var(--app-card);
+    border: 1px solid var(--app-card-border);
+    border-radius: var(--radius);
+    padding: 9px 10px;
+    position: relative;
+    cursor: grab;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+  }
+  .widget-card:active { cursor: grabbing; }
+  .widget-card.span-2 { grid-column: span 2; }
+  .widget-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .widget-card.drag-over { border-color: var(--charge-bright); }
+  .drag-hint {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    color: var(--app-muted);
+    opacity: 0.6;
+  }
+
+  /* Bottom Nav >= 48dp touch target */
+  .app-bottom-nav {
+    display: flex;
+    border-top: 1px solid var(--app-card-border);
+    background: var(--app-card);
+    padding: 4px 8px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .nav-item {
+    flex: 1;
+    min-height: 48px;
+    border: none;
+    background: transparent;
+    color: var(--app-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    padding: 4px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .nav-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* 30% Strip HUD (Auto-hides bottom nav, >=44-48px tap targets) */
+  .hud-strip {
+    height: 100%;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .hud-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--app-muted);
+    gap: 6px;
+  }
+  .hud-main-row {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 8px;
+    align-items: stretch;
+    min-height: 0;
+  }
+  .hud-strip.narrow .hud-main-row {
+    grid-template-columns: 1fr;
+    align-content: start;
+  }
+  .hud-metrics-2x2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .hud-strip.narrow .hud-metrics-2x2 { grid-template-columns: 1fr; }
+  .hud-mini-box {
+    background: var(--app-card);
+    border: 1px solid var(--app-card-border);
+    border-radius: 10px;
+    padding: 5px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .hud-mini-label {
+    font-size: 10px;
+    color: var(--app-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+  }
+  .hud-mini-val {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+    font-size: calc(15px * var(--font-scale));
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    margin-top: 2px;
+  }
+  .hud-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    background: var(--app-card);
+    border: 1px solid var(--app-card-border);
+    border-radius: 8px;
+    padding: 4px 8px;
+  }
+
+  .card-label {
+    font-size: 11px;
+    color: var(--app-muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 6px;
+    padding-right: 16px;
+  }
+  .big-val {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+    font-size: calc(19px * var(--font-scale));
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+  .sub-val {
+    font-size: 11px;
+    color: var(--app-muted);
+    margin-top: 3px;
+  }
+  .soc-gauge-wrap { display: flex; align-items: center; gap: 10px; }
+  .mos-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mos-pill {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--app-card-border);
+    background: var(--app-card-elevated);
+    color: var(--app-text);
+  }
+  .mos-on {
+    background: rgba(22, 163, 74, 0.16);
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.45);
+  }
+  .theme-light .mos-on {
+    background: #dcfce7;
+    color: #15803d;
+    border-color: #86efac;
+  }
+  .mos-warn {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.45);
+  }
+  .theme-light .mos-warn {
+    background: #fef3c7;
+    color: #b45309;
+    border-color: #fcd34d;
+  }
+
+  /* 24-Cell Grid */
+  .cell-grid { display: grid; gap: 6px; margin-top: 4px; }
+  .cell-item {
+    background: var(--app-card-elevated);
+    border: 1px solid var(--app-card-border);
+    border-radius: 8px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  .cell-item.is-max {
+    border-color: #0891b2;
+    background: rgba(34, 211, 238, 0.14);
+  }
+  .cell-item.is-min {
+    border-color: #d97706;
+    background: rgba(245, 158, 11, 0.14);
+  }
+  .cell-top {
+    display: flex;
+    justify-content: space-between;
+    color: var(--app-muted);
+    font-size: 9.5px;
+    font-weight: 600;
+  }
+  .cell-v {
+    font-family: var(--font-num);
+    font-weight: 700;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .cell-bar-bg {
+    height: 3px;
+    background: rgba(148,163,184,0.22);
+    border-radius: 2px;
+    margin-top: 3px;
+    overflow: hidden;
+  }
+  .cell-bar-fill { height: 100%; border-radius: 2px; }
+
+  .ro-group {
+    background: var(--app-card);
+    border: 1px solid var(--app-card-border);
+    border-radius: 12px;
+    padding: 9px 11px;
+    margin-bottom: 8px;
+  }
+  .ro-group-title {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .theme-light .ro-group-title { color: #0e7490; }
+  .ro-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--app-card-border);
+    font-size: 11.5px;
+  }
+  .ro-row:last-child { border-bottom: none; }
+  .ro-k { color: var(--app-muted); }
+  .ro-v { font-family: var(--font-num); font-weight: 700; }
+
+  .widget-list-item {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: #141d2e;
+    border: 1px solid var(--studio-border);
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .widget-list-item.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .chip-color {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+  }
+  .chip-color.active { border-color: #ffffff; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <svg class="ico ico-lg" style="color:var(--accent)" viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/><path d="M11 10l-2 3h4l-2 3"/></svg>
+    <span>JK BMS Pro-Max UI Studio — Redmi Note 5</span>
+    <span class="badge-ro">READ-ONLY</span>
+    <span class="badge-ro" style="border-color:rgba(22,163,74,0.45); color:#4ade80; background:rgba(22,163,74,0.14);">UX PRO MAX</span>
+  </div>
+  <div class="toolbar-group">
+    <button class="btn" id="btnLang" onclick="toggleLang()"></button>
+    <button class="btn" id="btnTheme" onclick="cycleTheme()"></button>
+    <button class="btn" id="btnSim" onclick="cycleScenario()"></button>
+    <button class="btn" onclick="resetLayout()">Reset</button>
+    <button class="btn btn-primary" onclick="exportJson()">Export ui_layout.json</button>
+  </div>
+</div>
+
+<div class="workspace">
+  <div class="sidebar">
+    <div>
+      <div class="section-title">1. Chia màn hình (Redmi Note 5)</div>
+      <div class="mode-grid" id="modeButtons"></div>
+    </div>
+
+    <div>
+      <div class="section-title">2. Design System Tokens</div>
+      <div class="control-box">
+        <div class="row-between">
+          <span>Màu nhấn chính</span>
+          <div style="display:flex; gap:6px;" id="colorChips"></div>
+        </div>
+        <div class="row-between">
+          <span>Cỡ chữ (Fira Code)</span>
+          <span class="num" id="lblFontScale">1.00x</span>
+        </div>
+        <input type="range" min="0.90" max="1.35" step="0.05" value="1" id="rngFontScale" oninput="setFontScale(this.value)" />
+        <div class="row-between">
+          <span>Bo góc (4dp grid)</span>
+          <span class="num" id="lblRadius">14px</span>
+        </div>
+        <input type="range" min="8" max="20" step="2" value="14" id="rngRadius" oninput="setRadius(this.value)" />
+        <div class="row-between">
+          <span>Số cột 24 Cell</span>
+          <select id="selCellCols" onchange="setCellCols(this.value)">
+            <option value="2">2 cột</option>
+            <option value="3">3 cột</option>
+            <option value="4" selected>4 cột</option>
+            <option value="6">6 cột</option>
+          </select>
+        </div>
+        <div class="row-between">
+          <span>In-App Split (Ngang)</span>
+          <select id="selInAppSplit" onchange="setInAppSplit(this.value)">
+            <option value="50">50 / 50</option>
+            <option value="70">30 / 70</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">3. Chuẩn UX Pro Max áp dụng</div>
+      <div class="control-box" style="font-size:11.5px; color:var(--studio-muted); line-height:1.5;">
+        <div>• <b>Typography:</b> Fira Code (số không nhảy vị trí) + Fira Sans.</div>
+        <div>• <b>Icons:</b> 100% SVG đồng nhất nét 2px (không dùng emoji).</div>
+        <div>• <b>Touch Targets:</b> Nút chạm ≥ 48dp, cách nhau ≥ 8dp.</div>
+        <div>• <b>Contrast ≥ 4.5:1:</b> Chữ rõ cả OLED đêm & Daylight nắng.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="stage-caption">
+      <span class="num" id="lblDimensions">360 × 700 dp</span>
+      <span>•</span>
+      <span>Kéo thả các thẻ trên màn hình để đổi thứ tự</span>
+    </div>
+    <div class="phone-shell" id="phoneShell">
+      <div class="phone-screen" id="phoneScreen"></div>
+    </div>
+  </div>
+
+  <div class="sidebar right">
+    <div>
+      <div class="section-title">Thứ tự thẻ (Drag & Drop)</div>
+      <div id="widgetList" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+    <div>
+      <div class="section-title">Chỉnh thẻ đang chọn</div>
+      <div class="control-box" id="inspectorBox"></div>
+    </div>
+    <div>
+      <div class="section-title">Mạch thật my_24s.hex</div>
+      <div class="control-box" style="font-size:11.5px; color:var(--studio-muted); line-height:1.45;">
+        <div><b style="color:var(--studio-text)">JK-BD6A24S6PD</b> (HW 20H / SW 20.25)</div>
+        <div>Protocol: <b style="color:var(--accent)">JK02_32S (AUTO)</b></div>
+        <div>Cảm biến T1..T4 (-200°C): hiển thị <b style="color:var(--studio-text)">--</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SVG = {
+  battery: '<svg class="ico" viewBox="0 0 24 24"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/><path d="M6 10v4"/><path d="M10 10v4"/></svg>',
+  bolt: '<svg class="ico" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>',
+  gauge: '<svg class="ico" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>',
+  thermometer: '<svg class="ico" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>',
+  grid: '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  chart: '<svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 4 3 5-6"/></svg>',
+  lock: '<svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  grip: '<svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>',
+  globe: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>',
+  moon: '<svg class="ico" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+  sun: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>',
+  delta: '<svg class="ico" viewBox="0 0 24 24"><path d="M12 3L3 20h18L12 3z"/></svg>',
+  pause: '<svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
+  play: '<svg class="ico ico-sm" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
+  navArrow: '<svg class="ico" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>'
+};
+
+const SCENARIOS = [
+  {
+    id: 'real_idle',
+    labelVi: 'Real Idle (80.08V)',
+    labelEn: 'Real Idle (80.08V)',
+    soc: 87, soh: 91, totalV: 80.083, currentA: 0.0, mosTemp: 34.4, t5Temp: 34.4,
+    balActive: true, balCurrent: 0.581, remAh: 39.15, nomAh: 45.0,
+    chgMos: true, dsgMos: true,
+    cells: [
+      3.339,3.339,3.339,3.339,3.339,3.336,3.336,3.336,
+      3.336,3.336,3.336,3.336,3.336,3.336,3.336,3.336,
+      3.336,3.336,3.336,3.336,3.336,3.336,3.336,3.336
+    ]
+  },
+  {
+    id: 'riding',
+    labelVi: 'Đang chạy (-18.5A)',
+    labelEn: 'Riding (-18.5A)',
+    soc: 74, soh: 91, totalV: 78.120, currentA: -18.5, mosTemp: 41.2, t5Temp: 37.8,
+    balActive: false, balCurrent: 0.0, remAh: 33.30, nomAh: 45.0,
+    chgMos: true, dsgMos: true,
+    cells: [
+      3.258,3.257,3.259,3.255,3.256,3.251,3.254,3.256,
+      3.255,3.254,3.257,3.253,3.255,3.256,3.252,3.255,
+      3.256,3.258,3.255,3.254,3.255,3.256,3.254,3.255
+    ]
+  },
+  {
+    id: 'charging',
+    labelVi: 'Đang sạc (+15.0A)',
+    labelEn: 'Charging (+15.0A)',
+    soc: 92, soh: 91, totalV: 82.440, currentA: 15.0, mosTemp: 39.0, t5Temp: 36.1,
+    balActive: true, balCurrent: 0.590, remAh: 41.40, nomAh: 45.0,
+    chgMos: true, dsgMos: true,
+    cells: [
+      3.442,3.438,3.436,3.435,3.437,3.429,3.434,3.435,
+      3.436,3.435,3.434,3.435,3.436,3.433,3.435,3.434,
+      3.436,3.435,3.437,3.434,3.435,3.434,3.435,3.435
+    ]
+  }
+];
+
+const MODES = [
+  { id: 'full_portrait', name: 'Full Dọc', sub: '360×700 dp', w: 360, h: 700, mapRatio: 0, landscape: false },
+  { id: 'split_50', name: 'Chia 50/50', sub: 'Map 50% | BMS 50%', w: 360, h: 700, mapRatio: 0.50, landscape: false },
+  { id: 'split_30', name: 'Chia 70/30 HUD', sub: 'Map 70% | BMS 30%', w: 360, h: 700, mapRatio: 0.70, landscape: false },
+  { id: 'split_70', name: 'Chia 30/70', sub: 'Map 30% | BMS 70%', w: 360, h: 700, mapRatio: 0.30, landscape: false },
+  { id: 'land_30', name: 'Ngang 70/30', sub: 'Map 70% | BMS 30%', w: 700, h: 360, mapRatio: 0.68, landscape: true },
+  { id: 'land_full', name: 'Ngang Full', sub: 'In-App 2 cột', w: 700, h: 360, mapRatio: 0, landscape: true }
+];
+
+const I18N = {
+  vi: {
+    monitor: 'Giám sát', cells: '24 Cell', chart: 'Biểu đồ', settings: 'Cài đặt (RO)',
+    socRing: 'Dung lượng SOC', powerGauge: 'Công suất & Dòng',
+    tempsMos: 'Nhiệt độ & MOSFET', cellBars: 'Điện áp 24 Cell', miniChart: 'Xu hướng Live',
+    charging: 'ĐANG SẠC', discharging: 'ĐANG XẢ', standby: 'ĐỨNG YÊN',
+    delta: 'Chênh lệch', mosOn: 'Sạc', dsgOn: 'Xả', balOn: 'Cân bằng',
+    roTitle: 'Cài đặt mạch JK (CHỈ ĐỌC)',
+    maxPower: 'Công suất', current: 'Dòng điện', hudSwitch: '24 Cell'
+  },
+  en: {
+    monitor: 'Monitor', cells: '24 Cells', chart: 'Charts', settings: 'Settings (RO)',
+    socRing: 'SOC Ring Gauge', powerGauge: 'Power & Current',
+    tempsMos: 'Temps & MOSFETs', cellBars: '24-Cell Voltages', miniChart: 'Streaming Trend',
+    charging: 'CHARGING', discharging: 'DISCHARGING', standby: 'STANDBY',
+    delta: 'Delta', mosOn: 'Chg', dsgOn: 'Dsg', balOn: 'Bal',
+    roTitle: 'JK BMS Settings (READ-ONLY)',
+    maxPower: 'Power', current: 'Current', hudSwitch: '24 Cells'
+  }
+};
+
+const DEFAULT_WIDGETS = [
+  { id: 'soc_ring', span: 1, visible: true, showIn50: true },
+  { id: 'power_gauge', span: 1, visible: true, showIn50: true },
+  { id: 'temps_mos', span: 2, visible: true, showIn50: true },
+  { id: 'cell_bars', span: 2, visible: true, showIn50: true },
+  { id: 'mini_chart', span: 2, visible: true, showIn50: false }
+];
+
+let state = {
+  modeId: 'split_30',
+  lang: 'vi',
+  theme: 'oled',
+  accent: '#22d3ee',
+  fontScale: 1.0,
+  radius: 14,
+  cellCols: 4,
+  inAppSplit: '50',
+  scenarioIdx: 0,
+  activeTab: 'monitor',
+  selectedWidgetId: 'soc_ring',
+  chartMetric: 'power',
+  chartPaused: false,
+  hudAltCells: false,
+  widgets: JSON.parse(JSON.stringify(DEFAULT_WIDGETS))
+};
+
+let dragSrcId = null;
+let tick = 0;
+
+function t(k) { return I18N[state.lang][k] || k; }
+
+function currentScenario() {
+  const base = SCENARIOS[state.scenarioIdx];
+  const jitter = state.scenarioIdx === 0 ? 0 : Math.sin(tick * 0.4) * 0.8;
+  const currentA = base.currentA === 0 ? 0 : +(base.currentA + jitter).toFixed(2);
+  const totalV = +(base.totalV - jitter * 0.03).toFixed(3);
+  const powerW = +(totalV * currentA).toFixed(1);
+  return { ...base, currentA, totalV, powerW };
+}
+
+function toggleLang() {
+  state.lang = state.lang === 'vi' ? 'en' : 'vi';
+  renderAll();
+}
+
+function cycleTheme() {
+  const order = ['oled', 'slate', 'light'];
+  state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
+  renderAll();
+}
+
+function cycleScenario() {
+  state.scenarioIdx = (state.scenarioIdx + 1) % SCENARIOS.length;
+  renderAll();
+}
+
+function setFontScale(v) {
+  state.fontScale = parseFloat(v);
+  document.documentElement.style.setProperty('--font-scale', v);
+  document.getElementById('lblFontScale').textContent = state.fontScale.toFixed(2) + 'x';
+  renderAll();
+}
+
+function setRadius(v) {
+  state.radius = parseInt(v, 10);
+  document.documentElement.style.setProperty('--radius', v + 'px');
+  document.getElementById('lblRadius').textContent = v + 'px';
+  renderAll();
+}
+
+function setCellCols(v) { state.cellCols = parseInt(v, 10); renderAll(); }
+function setInAppSplit(v) { state.inAppSplit = v; renderAll(); }
+function setMode(id) { state.modeId = id; state.hudAltCells = false; renderAll(); }
+
+function resetLayout() {
+  state.widgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
+  state.fontScale = 1.0;
+  state.radius = 14;
+  state.cellCols = 4;
+  state.accent = '#22d3ee';
+  document.documentElement.style.setProperty('--accent', '#22d3ee');
+  document.getElementById('rngFontScale').value = '1';
+  document.getElementById('rngRadius').value = '14';
+  document.getElementById('selCellCols').value = '4';
+  setFontScale(1);
+  setRadius(14);
+}
+
+function exportJson() {
+  const payload = {
+    designSystem: 'UI/UX Pro Max (Electric Cyan + Eco Green, Fira Code/Fira Sans)',
+    device: 'Xiaomi Redmi Note 5 (360dp width)',
+    bmsModel: 'JK-BD6A24S6PD (JK02_32S AUTO)',
+    readOnly: true,
+    theme: state.theme,
+    accentColor: state.accent,
+    fontScale: state.fontScale,
+    cornerRadiusDp: state.radius,
+    cellGridColumns: state.cellCols,
+    inAppLandscapeRatio: state.inAppSplit === '70' ? '30/70' : '50/50',
+    widgetsOrder: state.widgets
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ui_layout.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function widgetTitle(id) {
+  if (id === 'soc_ring') return t('socRing');
+  if (id === 'power_gauge') return t('powerGauge');
+  if (id === 'temps_mos') return t('tempsMos');
+  if (id === 'cell_bars') return t('cellBars');
+  return t('miniChart');
+}
+
+function renderTopbarButtons() {
+  document.getElementById('btnLang').innerHTML = `${SVG.globe}<span>${state.lang === 'vi' ? 'Tiếng Việt' : 'English'}</span>`;
+  const themeMap = {
+    oled: [SVG.moon, 'OLED Dark'],
+    slate: [SVG.moon, 'Slate Dark'],
+    light: [SVG.sun, 'Daylight']
+  };
+  const [tIcon, tLabel] = themeMap[state.theme];
+  document.getElementById('btnTheme').innerHTML = `${tIcon}<span>${tLabel}</span>`;
+  const sc = SCENARIOS[state.scenarioIdx];
+  document.getElementById('btnSim').innerHTML = `${SVG.bolt}<span>${state.lang === 'vi' ? sc.labelVi : sc.labelEn}</span>`;
+}
+
+function renderControls() {
+  renderTopbarButtons();
+  document.getElementById('modeButtons').innerHTML = MODES.map(m => `
+    <button class="mode-btn ${m.id === state.modeId ? 'active' : ''}" onclick="setMode('${m.id}')">
+      <b>${m.name}</b>
+      <small>${m.sub}</small>
+    </button>
+  `).join('');
+
+  const colors = ['#22d3ee', '#16a34a', '#f59e0b', '#38bdf8', '#a855f7'];
+  document.getElementById('colorChips').innerHTML = colors.map(c => `
+    <div class="chip-color ${state.accent === c ? 'active' : ''}" style="background:${c}"
+      onclick="state.accent='${c}'; document.documentElement.style.setProperty('--accent','${c}'); renderAll();"></div>
+  `).join('');
+
+  document.getElementById('widgetList').innerHTML = state.widgets.map(w => `
+    <div class="widget-list-item ${w.id === state.selectedWidgetId ? 'selected' : ''}"
+      onclick="state.selectedWidgetId='${w.id}'; renderAll();">
+      <span>${widgetTitle(w.id)}</span>
+      <span class="num" style="font-size:10px; color:var(--studio-muted);">${w.span === 2 ? 'FULL' : '1/2'} • ${w.visible ? 'ON' : 'OFF'}</span>
+    </div>
+  `).join('');
+
+  const sel = state.widgets.find(w => w.id === state.selectedWidgetId) || state.widgets[0];
+  const idx = state.widgets.indexOf(sel);
+  document.getElementById('inspectorBox').innerHTML = `
+    <div style="font-weight:700; font-size:12.5px; color:var(--accent);">${widgetTitle(sel.id)}</div>
+    <div class="row-between">
+      <span>Chiều rộng thẻ</span>
+      <div style="display:flex; gap:6px;">
+        <button class="btn ${sel.span === 1 ? 'active' : ''}" onclick="updateWidget('${sel.id}', {span:1})">1/2 hàng</button>
+        <button class="btn ${sel.span === 2 ? 'active' : ''}" onclick="updateWidget('${sel.id}', {span:2})">Full</button>
+      </div>
+    </div>
+    <div class="row-between">
+      <span>Hiển thị (Full / 70%)</span>
+      <button class="btn ${sel.visible ? 'active' : ''}" onclick="updateWidget('${sel.id}', {visible:${!sel.visible}})">${sel.visible ? 'Hiện' : 'Ẩn'}</button>
+    </div>
+    <div class="row-between">
+      <span>Hiển thị ở 50/50</span>
+      <button class="btn ${sel.showIn50 ? 'active' : ''}" onclick="updateWidget('${sel.id}', {showIn50:${!sel.showIn50}})">${sel.showIn50 ? 'Có' : 'Ẩn'}</button>
+    </div>
+    <div class="row-between">
+      <span>Thứ tự</span>
+      <div style="display:flex; gap:6px;">
+        <button class="btn" ${idx <= 0 ? 'disabled' : ''} onclick="moveWidget(${idx}, -1)">Lên</button>
+        <button class="btn" ${idx >= state.widgets.length - 1 ? 'disabled' : ''} onclick="moveWidget(${idx}, 1)">Xuống</button>
+      </div>
+    </div>
+  `;
+}
+
+function updateWidget(id, patch) {
+  state.widgets = state.widgets.map(w => w.id === id ? { ...w, ...patch } : w);
+  renderAll();
+}
+
+function moveWidget(idx, delta) {
+  const next = idx + delta;
+  if (next < 0 || next >= state.widgets.length) return;
+  const copy = [...state.widgets];
+  const [item] = copy.splice(idx, 1);
+  copy.splice(next, 0, item);
+  state.widgets = copy;
+  renderAll();
+}
+
+function socRingSvg(soc, totalV, size = 76) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const dash = (soc / 100) * c;
+  const stroke = soc <= 20 ? '#ef4444' : soc <= 40 ? '#f59e0b' : state.accent;
+  const mutedCol = state.theme === 'light' ? '#334155' : '#cbd5e1';
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 76 76" style="flex-shrink:0;" aria-label="SOC ${soc}%">
+      <defs>
+        <linearGradient id="socGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="${stroke}"/>
+          <stop offset="100%" stop-color="#16a34a"/>
+        </linearGradient>
+      </defs>
+      <circle cx="38" cy="38" r="${r}" fill="none" stroke="rgba(148,163,184,0.2)" stroke-width="7"/>
+      <circle cx="38" cy="38" r="${r}" fill="none" stroke="url(#socGrad)" stroke-width="7"
+        stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)} ${c.toFixed(1)}"
+        transform="rotate(-90 38 38)"/>
+      <path d="M39 16l-3 5h3l-1 4 4-5h-3z" fill="${stroke}"/>
+      <text x="38" y="42" text-anchor="middle" fill="currentColor" font-family="Fira Code, monospace" font-size="15.5" font-weight="700">${soc}%</text>
+      <text x="38" y="54" text-anchor="middle" fill="${mutedCol}" font-family="Fira Code, monospace" font-size="8.5" font-weight="600">${totalV.toFixed(1)}V</text>
+    </svg>
+  `;
+}
+
+function powerArcSvg(currentA, powerW) {
+  const maxA = 60;
+  const ratio = Math.min(1, Math.abs(currentA) / maxA);
+  const isLight = state.theme === 'light';
+  const color = currentA > 0.2 ? (isLight ? '#15803d' : '#22c55e') : currentA < -0.2 ? (isLight ? '#b45309' : '#f59e0b') : state.accent;
+  const mutedCol = isLight ? '#334155' : '#cbd5e1';
+  const r = 34;
+  const halfC = Math.PI * r;
+  const fillLen = ratio * halfC;
+  return `
+    <svg width="88" height="52" viewBox="0 0 88 52" style="flex-shrink:0;">
+      <path d="M 10 44 A 34 34 0 0 1 78 44" fill="none" stroke="rgba(148,163,184,0.22)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M 10 44 A 34 34 0 0 1 78 44" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+        stroke-dasharray="${fillLen.toFixed(1)} ${halfC.toFixed(1)}"/>
+      <text x="44" y="34" text-anchor="middle" fill="${color}" font-family="Fira Code, monospace" font-size="12.5" font-weight="700">${currentA >= 0 ? '+' : ''}${currentA.toFixed(1)}A</text>
+      <text x="44" y="47" text-anchor="middle" fill="${mutedCol}" font-family="Fira Code, monospace" font-size="9" font-weight="600">${powerW >= 0 ? '+' : ''}${Math.round(powerW)}W</text>
+    </svg>
+  `;
+}
+
+function calcCellExtremes(cells) {
+  const minV = Math.min(...cells);
+  const maxV = Math.max(...cells);
+  return {
+    minV,
+    maxV,
+    deltaVStr: (maxV - minV).toFixed(3),
+    minIdx: cells.indexOf(minV) + 1,
+    maxIdx: cells.indexOf(maxV) + 1
+  };
+}
+
+function renderWidgetCard(w, s, compact50) {
+  const { minV, maxV, deltaVStr, minIdx, maxIdx } = calcCellExtremes(s.cells);
+  const isLight = state.theme === 'light';
+
+  let inner = '';
+  if (w.id === 'soc_ring') {
+    inner = `
+      <div class="card-label">${SVG.battery}<span>${t('socRing')}</span></div>
+      <div class="soc-gauge-wrap">
+        ${socRingSvg(s.soc, s.totalV, 74)}
+        <div style="min-width:0;">
+          <div class="big-val">${s.totalV.toFixed(2)}<span style="font-size:12px;color:var(--app-muted)"> V</span></div>
+          <div class="sub-val num">${s.remAh.toFixed(1)} / ${s.nomAh.toFixed(0)} Ah</div>
+        </div>
+      </div>
+    `;
+  } else if (w.id === 'power_gauge') {
+    const modeLabel = s.currentA > 0.2 ? t('charging') : s.currentA < -0.2 ? t('discharging') : t('standby');
+    const col = s.currentA > 0.2 ? (isLight ? '#15803d' : '#22c55e') : s.currentA < -0.2 ? (isLight ? '#b45309' : '#f59e0b') : 'var(--app-text)';
+    inner = `
+      <div class="card-label">${SVG.gauge}<span>${t('powerGauge')}</span></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+        ${powerArcSvg(s.currentA, s.powerW)}
+        <div>
+          <div style="font-size:11px; font-weight:700; color:${col}">${modeLabel}</div>
+          <div class="sub-val num">Δ ${deltaVStr} V</div>
+          <div class="sub-val num">Bal ${s.balCurrent.toFixed(2)}A</div>
+        </div>
+      </div>
+    `;
+  } else if (w.id === 'temps_mos') {
+    inner = `
+      <div class="card-label">${SVG.thermometer}<span>${t('tempsMos')}</span></div>
+      <div class="mos-pills">
+        <span class="mos-pill ${s.chgMos ? 'mos-on' : ''}">${t('mosOn')}: ${s.chgMos ? 'ON' : 'OFF'}</span>
+        <span class="mos-pill ${s.dsgMos ? 'mos-on' : ''}">${t('dsgOn')}: ${s.dsgMos ? 'ON' : 'OFF'}</span>
+        <span class="mos-pill ${s.balActive ? 'mos-warn' : ''}">${t('balOn')}: ${s.balActive ? s.balCurrent.toFixed(2)+'A' : 'OFF'}</span>
+        <span class="mos-pill num">MOS ${s.mosTemp.toFixed(1)}°C</span>
+        <span class="mos-pill num">T5 ${s.t5Temp.toFixed(1)}°C</span>
+        <span class="mos-pill num">T1..4: --</span>
+      </div>
+    `;
+  } else if (w.id === 'cell_bars') {
+    const countToShow = compact50 ? 12 : 24;
+    inner = `
+      <div class="card-label" style="justify-content:space-between;">
+        <span style="display:inline-flex;align-items:center;gap:5px;">${SVG.grid}<span>${t('cellBars')}</span></span>
+        <span class="num" style="color:var(--app-text); font-size:10px;">MIN #${minIdx}:${minV.toFixed(3)} • MAX #${maxIdx}:${maxV.toFixed(3)}</span>
+      </div>
+      <div class="cell-grid" style="grid-template-columns: repeat(${state.cellCols}, 1fr);">
+        ${s.cells.slice(0, countToShow).map((v, i) => {
+          const isMax = (i + 1) === maxIdx;
+          const isMin = (i + 1) === minIdx;
+          const pct = Math.max(8, Math.min(100, ((v - 2.9) / (3.55 - 2.9)) * 100));
+          return `
+            <div class="cell-item ${isMax ? 'is-max' : isMin ? 'is-min' : ''}">
+              <div class="cell-top"><span class="num">#${i+1}</span><span>${isMax ? 'MAX' : isMin ? 'MIN' : ''}</span></div>
+              <div class="cell-v">${v.toFixed(3)}</div>
+              <div class="cell-bar-bg"><div class="cell-bar-fill" style="width:${pct.toFixed(0)}%; background:${isMax ? '#0891b2' : isMin ? '#d97706' : state.accent}"></div></div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      ${compact50 ? '<div class="sub-val" style="text-align:center;margin-top:5px;">Xem đủ 24 cell ở tab 24 Cell</div>' : ''}
+    `;
+  } else if (w.id === 'mini_chart') {
+    inner = renderChartSvg(s, 72);
+  }
+
+  return `
+    <div class="widget-card ${w.span === 2 ? 'span-2' : ''} ${w.id === state.selectedWidgetId ? 'selected' : ''}"
+      draggable="true"
+      ondragstart="onDragStart('${w.id}')"
+      ondragover="onDragOver(event, this)"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="onDrop(event, '${w.id}')"
+      onclick="state.selectedWidgetId='${w.id}'; renderControls(); renderPhone();">
+      <span class="drag-hint">${SVG.grip}</span>
+      ${inner}
+    </div>
+  `;
+}
+
+function renderChartSvg(s, height = 95) {
+  const pts = [];
+  for (let i = 0; i < 24; i++) {
+    const x = (i / 23) * 280;
+    const wave = Math.sin((i + tick) * 0.45) * 14 + Math.cos((i + tick) * 0.2) * 8;
+    const y = height / 2 - wave * (height / 95);
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+  }
+  const color = state.chartMetric === 'current' ? '#f59e0b' : state.chartMetric === 'delta' ? '#22d3ee' : state.accent;
+  return `
+    <div class="card-label" style="justify-content:space-between;">
+      <span style="display:inline-flex;align-items:center;gap:5px;">${SVG.chart}<span>${t('miniChart')} (${state.chartMetric.toUpperCase()})</span></span>
+      <span class="num" style="font-size:10px;">1m • 5m • 15m</span>
+    </div>
+    <svg width="100%" height="${height}" viewBox="0 0 280 ${height}" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="areaG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.34"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <line x1="0" y1="${height/2}" x2="280" y2="${height/2}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 4"/>
+      <polygon points="0,${height} ${pts.join(' ')} 280,${height}" fill="url(#areaG)"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="280" cy="${pts[pts.length-1].split(',')[1]}" r="3.5" fill="${color}"/>
+    </svg>
+  `;
+}
+
+function renderMapsPane(mode) {
+  const style = mode.landscape
+    ? `width: ${(mode.mapRatio * 100).toFixed(0)}%; height: 100%;`
+    : `height: ${(mode.mapRatio * 100).toFixed(0)}%; width: 100%;`;
+  return `
+    <div class="maps-pane" style="${style}">
+      <div class="maps-grid"></div>
+      <svg class="maps-route" viewBox="0 0 300 300" preserveAspectRatio="none">
+        <path d="M 40 270 Q 110 210 130 140 T 230 30" fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
+        <circle cx="132" cy="145" r="8" fill="#ffffff" stroke="#0891b2" stroke-width="4"/>
+      </svg>
+      <div class="maps-banner">
+        <span style="display:inline-flex;align-items:center;gap:4px;">${SVG.navArrow}<span>350m • QL1A</span></span>
+        <span>Google Maps</span>
+      </div>
+      <div class="maps-footer num">
+        <span>42 min (24.6 km)</span>
+        <span style="color:#4ade80;">ETA 19:12</span>
+      </div>
+    </div>
+    <div class="split-handle ${mode.landscape ? 'v' : 'h'}"><div class="split-pill"></div></div>
+  `;
+}
+
+function renderHudStrip30(mode, s) {
+  const { minV, maxV, deltaVStr } = calcCellExtremes(s.cells);
+  const isNarrow = mode.landscape;
+  const maxT = Math.max(s.mosTemp, s.t5Temp);
+  const isLight = state.theme === 'light';
+  const curColor = s.currentA < -0.2 ? (isLight ? '#b45309' : '#f59e0b') : s.currentA > 0.2 ? (isLight ? '#15803d' : '#22c55e') : 'var(--app-text)';
+
+  if (state.hudAltCells) {
+    return `
+      <div class="hud-strip">
+        <div class="hud-top-row">
+          <span style="display:inline-flex;align-items:center;gap:6px;"><span class="dot-live"></span><b>JK-BD6A24S6PD</b> • 24S</span>
+          <button class="pill-mini active" style="min-height:32px;" onclick="state.hudAltCells=false; renderPhone();">HUD</button>
+        </div>
+        <div class="cell-grid" style="grid-template-columns: repeat(${isNarrow ? 3 : 6}, 1fr); overflow:auto; flex:1;">
+          ${s.cells.map((v, i) => `
+            <div class="cell-item ${v === maxV ? 'is-max' : v === minV ? 'is-min' : ''}">
+              <div class="cell-top"><span class="num">#${i+1}</span></div>
+              <div class="cell-v">${v.toFixed(3)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="hud-strip ${isNarrow ? 'narrow' : ''}">
+      <div class="hud-top-row">
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span class="dot-live"></span><b>${isNarrow ? '24S' : 'JK-BD6A24S6PD • READ-ONLY'}</b></span>
+        <button class="pill-mini" style="min-height:32px;" onclick="state.hudAltCells=true; renderPhone();">${SVG.grid}<span>${t('hudSwitch')}</span></button>
+      </div>
+      <div class="hud-main-row">
+        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:3px; background:var(--app-card); border:1px solid var(--app-card-border); border-radius:12px; padding:6px 4px;">
+          ${socRingSvg(s.soc, s.totalV, isNarrow ? 72 : 84)}
+          <div class="num" style="font-size:11px; font-weight:700; color:var(--app-text);">${s.remAh.toFixed(1)}<span style="color:var(--app-muted); font-weight:500;"> / ${s.nomAh.toFixed(0)}Ah</span></div>
+        </div>
+        <div class="hud-metrics-2x2">
+          <div class="hud-mini-box">
+            <div class="hud-mini-label">${SVG.bolt}<span>${t('current')}</span></div>
+            <div class="hud-mini-val" style="color:${curColor}">${s.currentA >= 0 ? '+' : ''}${s.currentA.toFixed(1)} A</div>
+          </div>
+          <div class="hud-mini-box">
+            <div class="hud-mini-label">${SVG.gauge}<span>${t('maxPower')}</span></div>
+            <div class="hud-mini-val">${s.powerW >= 0 ? '+' : ''}${Math.round(s.powerW)} W</div>
+          </div>
+          <div class="hud-mini-box">
+            <div class="hud-mini-label">${SVG.delta}<span>${t('delta')}</span></div>
+            <div class="hud-mini-val" style="color:var(--accent);">${deltaVStr} V</div>
+          </div>
+          <div class="hud-mini-box">
+            <div class="hud-mini-label">${SVG.thermometer}<span>MOS / T5</span></div>
+            <div class="hud-mini-val">${maxT.toFixed(1)} °C</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSettingsRo() {
+  return `
+    <div style="font-size:11.5px; color:var(--accent); margin-bottom:8px; font-weight:700; display:flex; align-items:center; gap:6px;">
+      ${SVG.lock}<span>${t('roTitle')} (Frame 0x01)</span>
+    </div>
+    <div class="ro-group">
+      <div class="ro-group-title"><span>1. Pack & Cân bằng</span><span>READ-ONLY</span></div>
+      <div class="ro-row"><span class="ro-k">Cell count</span><span class="ro-v">24 S</span></div>
+      <div class="ro-row"><span class="ro-k">Nominal capacity</span><span class="ro-v">45.0 Ah</span></div>
+      <div class="ro-row"><span class="ro-k">Start balance V</span><span class="ro-v">3.000 V</span></div>
+      <div class="ro-row"><span class="ro-k">Balance trigger</span><span class="ro-v">0.003 V</span></div>
+      <div class="ro-row"><span class="ro-k">Max balance A</span><span class="ro-v">0.60 A</span></div>
+      <div class="ro-row"><span class="ro-k">Switches (Chg/Dsg/Bal)</span><span class="ro-v">ON / ON / ON</span></div>
+    </div>
+    <div class="ro-group">
+      <div class="ro-group-title"><span>2. Bảo vệ Điện áp</span><span>READ-ONLY</span></div>
+      <div class="ro-row"><span class="ro-k">Cell OVP / OVPR</span><span class="ro-v">3.500 V / 3.450 V</span></div>
+      <div class="ro-row"><span class="ro-k">Cell UVP / UVPR</span><span class="ro-v">2.910 V / 2.980 V</span></div>
+      <div class="ro-row"><span class="ro-k">Power off voltage</span><span class="ro-v">2.850 V</span></div>
+    </div>
+    <div class="ro-group">
+      <div class="ro-group-title"><span>3. Bảo vệ Dòng & Nhiệt độ</span><span>READ-ONLY</span></div>
+      <div class="ro-row"><span class="ro-k">Max Charge / Discharge</span><span class="ro-v">60.0 A / 60.0 A</span></div>
+      <div class="ro-row"><span class="ro-k">SCP Delay</span><span class="ro-v">5 us</span></div>
+      <div class="ro-row"><span class="ro-k">Chg/Dsg OTP • MOS OTP</span><span class="ro-v">70°C / 70°C • 80°C</span></div>
+      <div class="ro-row"><span class="ro-k">Charge UTP</span><span class="ro-v">-10.0 °C</span></div>
+    </div>
+  `;
+}
+
+function renderPhone() {
+  const mode = MODES.find(m => m.id === state.modeId);
+  const s = currentScenario();
+  const shell = document.getElementById('phoneShell');
+  const screen = document.getElementById('phoneScreen');
+
+  shell.style.width = (mode.w + 26) + 'px';
+  shell.style.height = (mode.h + 26) + 'px';
+  screen.className = 'phone-screen' + (mode.landscape ? ' landscape' : '');
+
+  const bmsW = mode.landscape ? Math.round(mode.w * (1 - mode.mapRatio)) : mode.w;
+  const bmsH = mode.landscape ? mode.h : Math.round(mode.h * (1 - mode.mapRatio));
+  document.getElementById('lblDimensions').textContent =
+    `${mode.w}×${mode.h} dp • App BMS: ${bmsW}×${bmsH} dp`;
+
+  const themeClass = state.theme === 'light' ? 'theme-light' : state.theme === 'slate' ? 'theme-slate' : '';
+  const appStyle = mode.landscape
+    ? `width:${mode.mapRatio ? ((1 - mode.mapRatio) * 100).toFixed(0) + '%' : '100%'}; height:100%;`
+    : `height:${mode.mapRatio ? ((1 - mode.mapRatio) * 100).toFixed(0) + '%' : '100%'}; width:100%;`;
+
+  const isUltraCompactHud = mode.id === 'split_30' || mode.id === 'land_30';
+  const isCompact50 = mode.id === 'split_50';
+  const isInAppLandscape = mode.id === 'land_full';
+
+  let appHtml = '';
+  if (isUltraCompactHud) {
+    appHtml = renderHudStrip30(mode, s);
+  } else {
+    let bodyHtml = '';
+    if (state.activeTab === 'monitor') {
+      const visibleWidgets = state.widgets.filter(w => w.visible && (!isCompact50 || w.showIn50));
+      const gridClass = isInAppLandscape ? (state.inAppSplit === '70' ? 'inapp-70' : 'inapp-50') : '';
+      bodyHtml = `<div class="widget-grid ${gridClass}">${visibleWidgets.map(w => renderWidgetCard(w, s, isCompact50)).join('')}</div>`;
+    } else if (state.activeTab === 'cells') {
+      bodyHtml = `<div class="widget-grid">${renderWidgetCard({ id: 'cell_bars', span: 2 }, s, false)}</div>`;
+    } else if (state.activeTab === 'chart') {
+      bodyHtml = `
+        <div class="widget-card span-2">
+          <div style="display:flex; justify-content:space-between; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              ${['voltage', 'current', 'power', 'delta'].map(m => `
+                <button class="pill-mini ${state.chartMetric === m ? 'active' : ''}" onclick="state.chartMetric='${m}'; renderPhone();">${m.toUpperCase()}</button>
+              `).join('')}
+            </div>
+            <button class="pill-mini" onclick="state.chartPaused=!state.chartPaused; renderPhone();">
+              ${state.chartPaused ? SVG.play : SVG.pause}<span>${state.chartPaused ? 'Resume' : 'Pause'}</span>
+            </button>
+          </div>
+          ${renderChartSvg(s, 140)}
+        </div>
+      `;
+    } else {
+      bodyHtml = renderSettingsRo();
+    }
+
+    const navIcons = { monitor: SVG.bolt, cells: SVG.grid, chart: SVG.chart, settings: SVG.lock };
+    appHtml = `
+      <div class="app-header">
+        <div class="app-header-left">
+          <span class="dot-live"></span>
+          <span>JK-BD6A24S6PD</span>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          ${isInAppLandscape ? `<button class="pill-mini active" onclick="setInAppSplit('${state.inAppSplit === '50' ? '70' : '50'}')">Split ${state.inAppSplit === '50' ? '50/50' : '30/70'}</button>` : ''}
+          <span class="pill-mini" style="cursor:default;">${SVG.lock}<span>Read Only</span></span>
+        </div>
+      </div>
+      <div class="app-scroll">${bodyHtml}</div>
+      <div class="app-bottom-nav">
+        ${['monitor', 'cells', 'chart', 'settings'].map(tab => `
+          <button class="nav-item ${state.activeTab === tab ? 'active' : ''}" onclick="state.activeTab='${tab}'; renderPhone();">
+            ${navIcons[tab]}
+            <span>${t(tab)}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  screen.innerHTML = (mode.mapRatio > 0 ? renderMapsPane(mode) : '') +
+    `<div class="app-pane ${themeClass}" style="${appStyle}">${appHtml}</div>`;
+}
+
+function onDragStart(id) { dragSrcId = id; }
+function onDragOver(e, el) { e.preventDefault(); el.classList.add('drag-over'); }
+function onDrop(e, targetId) {
+  e.preventDefault();
+  if (!dragSrcId || dragSrcId === targetId) return;
+  const from = state.widgets.findIndex(w => w.id === dragSrcId);
+  const to = state.widgets.findIndex(w => w.id === targetId);
+  if (from < 0 || to < 0) return;
+  const copy = [...state.widgets];
+  const [moved] = copy.splice(from, 1);
+  copy.splice(to, 0, moved);
+  state.widgets = copy;
+  dragSrcId = null;
+  renderAll();
+}
+
+function renderAll() {
+  renderControls();
+  renderPhone();
+}
+
+setInterval(() => {
+  if (!state.chartPaused && (state.scenarioIdx !== 0 || state.activeTab === 'chart')) {
+    tick++;
+    renderPhone();
+  }
+}, 1200);
+
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+.gradle/
+build/
+**/build/
+.idea/
+*.iml
+local.properties
+tools/.venv/
+tools/__pycache__/
+tools/*.hex
+tools/*.json
+.DS_Store

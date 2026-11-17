@@ -1,0 +1,19 @@
+{
+  "designSystem": "UI/UX Pro Max (Electric Cyan + Eco Green, Fira Code/Fira Sans)",
+  "device": "Xiaomi Redmi Note 5 (360dp width)",
+  "bmsModel": "JK-BD6A24S6PD (JK02_32S AUTO)",
+  "readOnly": true,
+  "theme": "oled",
+  "accentColor": "#22d3ee",
+  "fontScale": 1,
+  "cornerRadiusDp": 14,
+  "cellGridColumns": 4,
+  "inAppLandscapeRatio": "50/50",
+  "widgetsOrder": [
+    { "id": "soc_ring", "span": 2, "visible": true, "showIn50": true },
+    { "id": "power_gauge", "span": 2, "visible": true, "showIn50": true },
+    { "id": "temps_mos", "span": 2, "visible": true, "showIn50": true },
+    { "id": "mini_chart", "span": 2, "visible": true, "showIn50": false },
+    { "id": "cell_bars", "span": 2, "visible": true, "showIn50": true }
+  ]
+}
