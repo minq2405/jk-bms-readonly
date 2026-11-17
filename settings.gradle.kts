@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "bms-jk-v2"
+rootProject.name = "jk-bms-readonly"
 
 include(":bms-core")
 include(":bms-cli")
