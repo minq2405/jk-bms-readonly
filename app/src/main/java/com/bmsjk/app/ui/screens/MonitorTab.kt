@@ -547,13 +547,13 @@ fun CellsGridCard(
     columns: Int
 ) {
     val activeCells = telemetry.cells.filter { it.enabled && it.voltageV > 0f }
-        .ifEmpty { telemetry.cells.take(24) }
+        .ifEmpty { telemetry.cells }
     val rows = activeCells.chunked(columns.coerceAtLeast(1))
 
     OledCard(modifier = Modifier.fillMaxWidth()) {
         CardLabelRow(
             icon = AppIcons.Grid,
-            title = "${strings.cellBars} (${activeCells.size})",
+            title = strings.cellVoltagesTitle(activeCells.size.takeIf { it > 0 }),
             trailing = {
                 Text(
                     text = String.format(Locale.US, "Δ %.3f V", telemetry.deltaCellVoltageMv / 1000f),
@@ -598,19 +598,17 @@ fun CellGridTile(
     modifier: Modifier = Modifier
 ) {
     val border = when {
-        cell.wireWarning -> OledTokens.DangerRed
-        isMax -> OledTokens.AccentStrong
+        cell.wireWarning || isMax -> OledTokens.DangerRed
         isMin -> OledTokens.AmberStrong
         else -> OledTokens.CardBorder
     }
     val bg = when {
-        cell.wireWarning -> OledTokens.DangerSoft
-        isMax -> OledTokens.AccentSoft
+        cell.wireWarning || isMax -> OledTokens.DangerSoft
         isMin -> OledTokens.AmberSoft
         else -> OledTokens.CardElevated
     }
     val barColor = when {
-        isMax -> OledTokens.AccentStrong
+        cell.wireWarning || isMax -> OledTokens.DangerRed
         isMin -> OledTokens.AmberStrong
         else -> OledTokens.Accent
     }
@@ -630,16 +628,22 @@ fun CellGridTile(
             ) {
                 Text(
                     text = "#${cell.index}",
-                    style = monoStyle(size = 10.sp, weight = FontWeight.SemiBold, color = OledTokens.Muted)
+                    style = monoStyle(size = 10.sp, weight = FontWeight.SemiBold, color = OledTokens.Muted),
+                    maxLines = 1
                 )
-                if (isMax || isMin) {
-                    Text(
-                        text = if (isMax) "MAX" else "MIN",
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isMax) OledTokens.Accent else OledTokens.AmberText
-                    )
-                }
+                Text(
+                    text = when {
+                        isMax -> "MAX"
+                        isMin -> "MIN"
+                        else -> ""
+                    },
+                    style = monoStyle(
+                        size = 10.sp,
+                        weight = FontWeight.Bold,
+                        color = if (isMax) OledTokens.DangerRed else OledTokens.AmberText
+                    ),
+                    maxLines = 1
+                )
             }
             Spacer(modifier = Modifier.height(1.dp))
             Text(
@@ -746,7 +750,7 @@ fun Hud30View(
                             text = when {
                                 state.hudShowCells -> "HUD"
                                 isNarrow -> strings.cellWord
-                                else -> strings.cells
+                                else -> strings.cellsTabLabel(state.activeCellCount)
                             },
                             color = if (state.hudShowCells) OledTokens.Accent else OledTokens.Muted,
                             fontSize = 10.5.sp,
@@ -770,7 +774,7 @@ fun Hud30View(
         if (state.hudShowCells) {
             val cols = if (isNarrow) 3 else 6
             val activeCells = telemetry.cells.filter { it.enabled && it.voltageV > 0f }
-                .ifEmpty { telemetry.cells.take(24) }
+                .ifEmpty { telemetry.cells }
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (rowCells in activeCells.chunked(cols)) {
                     Row(

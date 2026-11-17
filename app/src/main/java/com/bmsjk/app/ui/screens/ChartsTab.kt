@@ -209,7 +209,7 @@ private fun formatMetricValue(value: Float?, metric: ChartMetric): String {
         ChartMetric.PACK_VOLTAGE -> String.format(Locale.US, "%.2fV", value)
         ChartMetric.CURRENT -> String.format(Locale.US, "%.1fA", value)
         ChartMetric.POWER -> String.format(Locale.US, "%.0fW", value)
-        ChartMetric.DELTA_MV -> String.format(Locale.US, "%.1fmV", value)
+        ChartMetric.DELTA_MV -> String.format(Locale.US, "%.3fV", value / 1000f)
         ChartMetric.MAX_TEMPERATURE -> String.format(Locale.US, "%.1f°C", value)
     }
 }

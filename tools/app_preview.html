@@ -347,8 +347,10 @@
     padding: 4px 6px;
     font-size: 10.5px;
   }
-  .cell-item.is-max { border-color: #0891b2; background: rgba(34, 211, 238, 0.14); }
+  .cell-item.is-max { border-color: #ef4444; background: rgba(239, 68, 68, 0.15); }
   .cell-item.is-min { border-color: #d97706; background: rgba(245, 158, 11, 0.14); }
+  .cell-item.is-max .cell-top span:last-child { color: #ef4444; }
+  .cell-item.is-min .cell-top span:last-child { color: #fbbf24; }
   .cell-top { display: flex; justify-content: space-between; color: var(--app-muted); font-size: 10.5px; font-weight: 600; }
   .cell-v { font-family: var(--font-num); font-weight: 700; font-size: 11px; margin-top: 2px; }
   .cell-bar-bg { height: 3px; background: rgba(148,163,184,0.22); border-radius: 2px; margin-top: 3px; overflow: hidden; }
@@ -841,7 +843,7 @@ function cardCells(d, count = 24, colsOverride = 0) {
             <div class="cell-item ${isMax ? 'is-max' : isMin ? 'is-min' : ''}">
               <div class="cell-top"><span class="num">#${i+1}</span><span>${isMax ? 'MAX' : isMin ? 'MIN' : ''}</span></div>
               <div class="cell-v">${v.toFixed(3)}</div>
-              <div class="cell-bar-bg"><div class="cell-bar-fill" style="width:${pct.toFixed(0)}%; background:${isMax ? '#0891b2' : isMin ? '#d97706' : '#22d3ee'}"></div></div>
+              <div class="cell-bar-bg"><div class="cell-bar-fill" style="width:${pct.toFixed(0)}%; background:${isMax ? '#ef4444' : isMin ? '#d97706' : '#22d3ee'}"></div></div>
             </div>
           `;
         }).join('')}

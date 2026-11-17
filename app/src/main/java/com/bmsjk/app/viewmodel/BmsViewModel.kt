@@ -9,8 +9,6 @@ import com.bmsjk.app.ble.JkBleManager
 import com.bmsjk.app.ble.MacPayloadParser
 import com.bmsjk.app.data.AppLanguage
 import com.bmsjk.app.data.SharedPrefsPasscodeStore
-import com.bmsjk.app.demo.DemoBmsSimulator
-import com.bmsjk.app.demo.DemoScenario
 import com.bmsjk.core.protocol.ProtocolMode
 import com.bmsjk.core.session.BmsSessionEngine
 import com.bmsjk.core.session.BmsSessionSnapshot
@@ -47,17 +45,21 @@ data class BmsUiState(
     val chartWindow: ChartWindow = ChartWindow.FIVE_MINUTES,
     val chartSamples: List<TrendSample> = emptyList(),
     val chartStats: MetricStats = MetricStats(null, null, null, null),
-    val isDemoMode: Boolean = false,
-    val demoScenario: DemoScenario = DemoScenario.IDLE,
     val bannerMessage: String? = null
-)
+) {
+    /**
+     * Dynamic cell count detected from live telemetry or BMS settings (null when unknown).
+     */
+    val activeCellCount: Int?
+        get() = session.telemetry?.enabledCellCount?.takeIf { it > 0 }
+            ?: session.settings?.cellCount?.takeIf { it > 0 }
+}
 
 class BmsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = SharedPrefsPasscodeStore(application)
     private val engine = BmsSessionEngine(passcodeStore = store)
     private val bleManager = JkBleManager(application, engine, viewModelScope)
-    private val demoSimulator = DemoBmsSimulator(engine, viewModelScope)
 
     private val selectedTab = MutableStateFlow(AppTab.CONNECT)
     private val searchQuery = MutableStateFlow("")
@@ -65,8 +67,6 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
     private val hudShowCells = MutableStateFlow(false)
     private val chartMetric = MutableStateFlow(ChartMetric.PACK_VOLTAGE)
     private val chartWindow = MutableStateFlow(ChartWindow.FIVE_MINUTES)
-    private val isDemoMode = MutableStateFlow(false)
-    private val demoScenario = MutableStateFlow(DemoScenario.IDLE)
     private val bannerMessage = MutableStateFlow<String?>(null)
 
     private data class NavPrefs(
@@ -76,8 +76,6 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         val hudCells: Boolean,
         val metric: ChartMetric,
         val window: ChartWindow,
-        val demo: Boolean,
-        val scenario: DemoScenario,
         val banner: String?
     )
 
@@ -85,8 +83,8 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         combine(selectedTab, searchQuery, language, hudShowCells) { tab, query, lang, hud ->
             Quad(tab, query, lang, hud)
         },
-        combine(chartMetric, chartWindow, isDemoMode, demoScenario, bannerMessage) { metric, window, demo, sc, banner ->
-            Quint(metric, window, demo, sc, banner)
+        combine(chartMetric, chartWindow, bannerMessage) { metric, window, banner ->
+            Triple(metric, window, banner)
         }
     ) { a, b ->
         NavPrefs(
@@ -96,9 +94,7 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
             hudCells = a.fourth,
             metric = b.first,
             window = b.second,
-            demo = b.third,
-            scenario = b.fourth,
-            banner = b.fifth
+            banner = b.third
         )
     }
 
@@ -120,18 +116,10 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         val samples = engine.queryChart(prefs.window, nowMs)
         val stats = engine.queryMetricStats(prefs.metric, prefs.window, nowMs)
         val filtered = filterDevices(ble.second, prefs.query)
-        val effectiveConn = if (prefs.demo) {
-            BleConnectionState.Connected(
-                address = DemoBmsSimulator.DEMO_MAC,
-                name = session.deviceInfo?.deviceName ?: "JK-BD6A24S6PD (Demo)"
-            )
-        } else {
-            ble.first
-        }
 
         BmsUiState(
             session = session,
-            connectionState = effectiveConn,
+            connectionState = ble.first,
             scannedDevices = filtered,
             isScanning = ble.third,
             scanCompletedOnce = ble.fourth,
@@ -143,8 +131,6 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
             chartWindow = prefs.window,
             chartSamples = samples,
             chartStats = stats,
-            isDemoMode = prefs.demo,
-            demoScenario = prefs.scenario,
             bannerMessage = prefs.banner
         )
     }.stateIn(
@@ -187,13 +173,12 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerInitialScanIfNeeded(hasPermissions: Boolean) {
         if (!hasPermissions) return
-        if (!bleManager.scanCompletedOnce.value && !bleManager.isScanning.value && !isDemoMode.value) {
+        if (!bleManager.scanCompletedOnce.value && !bleManager.isScanning.value) {
             startOneShotScanIfPermitted(true)
         }
     }
 
     fun connectToDevice(device: BleDeviceItem) {
-        stopDemoMode()
         bannerMessage.value = null
         bleManager.connect(device.address, device.name)
     }
@@ -208,14 +193,12 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
             }
             return false
         }
-        stopDemoMode()
         bannerMessage.value = null
         bleManager.connect(mac, mac)
         return true
     }
 
     fun disconnect() {
-        stopDemoMode()
         bleManager.disconnect()
         engine.startSession("")
         bannerMessage.value = null
@@ -225,11 +208,7 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         val status = engine.submitPasscode(code)
         if (status is PasscodeStatus.Unlocked) {
             bannerMessage.value = null
-            if (isDemoMode.value) {
-                demoSimulator.emitSettingsAndCurrentCellsIfUnlocked()
-            } else {
-                bleManager.triggerImmediateCellRefresh()
-            }
+            bleManager.triggerImmediateCellRefresh()
             selectedTab.value = AppTab.MONITOR
         }
     }
@@ -263,39 +242,6 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         engine.clearChartHistory()
     }
 
-    fun startDemoMode(scenario: DemoScenario = DemoScenario.IDLE) {
-        bleManager.disconnect()
-        isDemoMode.value = true
-        demoScenario.value = scenario
-        bannerMessage.value = null
-        demoSimulator.start(initialScenario = scenario)
-        if (engine.snapshot.value.isUnlocked) {
-            selectedTab.value = AppTab.MONITOR
-        }
-    }
-
-    fun cycleDemoScenario() {
-        if (!isDemoMode.value) {
-            startDemoMode(DemoScenario.IDLE)
-            return
-        }
-        val order = DemoScenario.entries
-        val next = order[(order.indexOf(demoScenario.value) + 1) % order.size]
-        demoScenario.value = next
-        demoSimulator.setScenario(next)
-    }
-
-    fun dismissBanner() {
-        bannerMessage.value = null
-    }
-
-    private fun stopDemoMode() {
-        if (isDemoMode.value) {
-            demoSimulator.stop()
-            isDemoMode.value = false
-        }
-    }
-
     private fun filterDevices(devices: List<BleDeviceItem>, query: String): List<BleDeviceItem> {
         val q = query.trim()
         if (q.isEmpty()) return devices
@@ -306,16 +252,8 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        demoSimulator.stop()
         bleManager.disconnect()
     }
 
     private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
-    private data class Quint<A, B, C, D, E>(
-        val first: A,
-        val second: B,
-        val third: C,
-        val fourth: D,
-        val fifth: E
-    )
 }

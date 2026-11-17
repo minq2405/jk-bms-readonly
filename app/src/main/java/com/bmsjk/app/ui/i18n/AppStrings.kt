@@ -6,8 +6,8 @@ import com.bmsjk.core.session.ChartMetric
 import com.bmsjk.core.session.ChartWindow
 
 data class UiStrings(
+    val isVi: Boolean,
     val monitor: String,
-    val cells: String,
     val chart: String,
     val settings: String,
     val connect: String,
@@ -15,7 +15,6 @@ data class UiStrings(
     val socRing: String,
     val powerGauge: String,
     val tempsMos: String,
-    val cellBars: String,
     val miniChart: String,
     val charging: String,
     val discharging: String,
@@ -46,8 +45,10 @@ data class UiStrings(
     val searchHint: String,
     val scanOnceHint: String,
     val scanIdleHint: String,
+    val noBmsFoundHint: String,
     val connectedBadge: String,
     val connectingBadge: String,
+    val errorBadge: String,
     val disconnect: String,
     val connectBtn: String,
     val passcodeTitle: String,
@@ -59,22 +60,29 @@ data class UiStrings(
     val qrDialogTitle: String,
     val qrDialogHint: String,
     val cancel: String,
-    val demoModeLabel: String,
-    val demoScenarioSwitch: String,
     val permissionTitle: String,
     val permissionDesc: String,
     val grantPermission: String,
     val notConnectedTitle: String,
     val notConnectedDesc: String,
     val goToConnect: String,
-    val wireWarning: String,
     val activeAlarms: String
-)
+) {
+    fun cellsTabLabel(cellCount: Int?): String {
+        val n = cellCount?.takeIf { it > 0 }?.toString() ?: "N"
+        return if (isVi) "$n Cell" else if (n == "1") "1 Cell" else "$n Cells"
+    }
+
+    fun cellVoltagesTitle(cellCount: Int?): String {
+        val n = cellCount?.takeIf { it > 0 }?.toString() ?: "N"
+        return if (isVi) "Điện áp $n Cell" else "$n-Cell Voltages"
+    }
+}
 
 object AppStrings {
     private val VI = UiStrings(
+        isVi = true,
         monitor = "Giám sát",
-        cells = "24 Cell",
         chart = "Biểu đồ",
         settings = "Cài đặt",
         connect = "Kết nối",
@@ -82,7 +90,6 @@ object AppStrings {
         socRing = "Dung lượng SOC",
         powerGauge = "Công suất & Dòng",
         tempsMos = "Nhiệt độ & MOSFET",
-        cellBars = "Điện áp Cell",
         miniChart = "Xu hướng Live",
         charging = "ĐANG SẠC",
         discharging = "ĐANG XẢ",
@@ -107,14 +114,16 @@ object AppStrings {
         tempProtectGroup = "3. Bảo vệ Nhiệt độ",
         protocolGroup = "Giao thức & Ngôn ngữ",
         languageLabel = "Ngôn ngữ hiển thị",
-        scan = "Quét",
+        scan = "Quét BMS",
         scanning = "Đang quét...",
         qrButton = "QR/MAC",
-        searchHint = "Tìm tên hoặc MAC...",
-        scanOnceHint = "Mở app tự quét 1 lần (8s, tiết kiệm pin). Đang kết nối sẽ giữ nguyên.",
-        scanIdleHint = "Đã quét xong 1 lượt (tiết kiệm pin). Bấm Quét để tìm lại.",
+        searchHint = "Tìm tên hoặc MAC JK BMS...",
+        scanOnceHint = "Chỉ hiện mạch JK BMS (tự quét 1 lần 8s, giữ nguyên kết nối đang chạy).",
+        scanIdleHint = "Đã quét xong 1 lượt (chỉ hiện JK BMS). Bấm Quét BMS để tìm lại.",
+        noBmsFoundHint = "Chưa thấy mạch JK BMS nào gần đây. Hãy đảm bảo BMS đang bật và không kết nối app khác.",
         connectedBadge = "Đang kết nối",
         connectingBadge = "Đang nối...",
+        errorBadge = "Lỗi kết nối",
         disconnect = "Ngắt",
         connectBtn = "Kết nối",
         passcodeTitle = "Xác thực Passcode (Chỉ lần đầu)",
@@ -126,21 +135,18 @@ object AppStrings {
         qrDialogTitle = "Nhập MAC hoặc dán mã QR",
         qrDialogHint = "Ví dụ: C8:47:8C:11:22:33 hoặc chuỗi QR có MAC",
         cancel = "Hủy",
-        demoModeLabel = "Demo 24S",
-        demoScenarioSwitch = "Đổi kịch bản Demo",
         permissionTitle = "Cần quyền Bluetooth LE",
         permissionDesc = "Cấp quyền Bluetooth để quét và đọc dữ liệu JK BMS (chỉ đọc).",
         grantPermission = "Cấp quyền",
         notConnectedTitle = "Chưa kết nối JK BMS",
-        notConnectedDesc = "Vào tab Kết nối để quét BLE hoặc bật Demo 24S kiểm thử.",
+        notConnectedDesc = "Vào tab Kết nối để quét và kết nối mạch JK BMS của bạn.",
         goToConnect = "Mở Kết nối",
-        wireWarning = "Cảnh báo dây",
         activeAlarms = "Cảnh báo BMS"
     )
 
     private val EN = UiStrings(
+        isVi = false,
         monitor = "Monitor",
-        cells = "Cells",
         chart = "Charts",
         settings = "Settings",
         connect = "Connect",
@@ -148,7 +154,6 @@ object AppStrings {
         socRing = "SOC Capacity",
         powerGauge = "Power & Current",
         tempsMos = "Temps & MOSFETs",
-        cellBars = "Cell Voltages",
         miniChart = "Streaming Trend",
         charging = "CHARGING",
         discharging = "DISCHARGING",
@@ -173,14 +178,16 @@ object AppStrings {
         tempProtectGroup = "3. Temperature Protections",
         protocolGroup = "Protocol & Language",
         languageLabel = "Display Language",
-        scan = "Scan",
+        scan = "Scan BMS",
         scanning = "Scanning...",
         qrButton = "QR/MAC",
-        searchHint = "Search name or MAC...",
-        scanOnceHint = "One-shot 8s BLE scan on launch (battery conscious). Active link stays intact.",
-        scanIdleHint = "One-shot scan complete. Tap Scan to refresh.",
+        searchHint = "Search JK BMS name or MAC...",
+        scanOnceHint = "Shows JK BMS devices only (one-shot 8s scan, active link stays intact).",
+        scanIdleHint = "One-shot scan complete (JK BMS only). Tap Scan BMS to refresh.",
+        noBmsFoundHint = "No JK BMS found nearby. Make sure the BMS is awake and no other app is connected.",
         connectedBadge = "Connected",
         connectingBadge = "Connecting...",
+        errorBadge = "Conn Error",
         disconnect = "Disconnect",
         connectBtn = "Connect",
         passcodeTitle = "Verify Passcode (First Time Only)",
@@ -192,15 +199,12 @@ object AppStrings {
         qrDialogTitle = "Enter MAC or Paste QR Payload",
         qrDialogHint = "Example: C8:47:8C:11:22:33 or QR payload containing MAC",
         cancel = "Cancel",
-        demoModeLabel = "Demo 24S",
-        demoScenarioSwitch = "Cycle Demo Scenario",
         permissionTitle = "Bluetooth LE Permission Required",
         permissionDesc = "Grant Bluetooth permissions to scan and monitor your JK BMS (read-only).",
         grantPermission = "Grant",
         notConnectedTitle = "No JK BMS Connected",
-        notConnectedDesc = "Open Connect to scan BLE devices or launch 24S Demo mode.",
+        notConnectedDesc = "Open Connect to scan and connect to your JK BMS.",
         goToConnect = "Open Connect",
-        wireWarning = "Wire warning",
         activeAlarms = "BMS Alarms"
     )
 
@@ -210,7 +214,7 @@ object AppStrings {
         ChartMetric.PACK_VOLTAGE -> if (lang == AppLanguage.VI) "ĐIỆN ÁP (V)" else "VOLTAGE (V)"
         ChartMetric.CURRENT -> if (lang == AppLanguage.VI) "DÒNG (A)" else "CURRENT (A)"
         ChartMetric.POWER -> if (lang == AppLanguage.VI) "CÔNG SUẤT (W)" else "POWER (W)"
-        ChartMetric.DELTA_MV -> "DELTA (mV)"
+        ChartMetric.DELTA_MV -> "DELTA (V)"
         ChartMetric.MAX_TEMPERATURE -> if (lang == AppLanguage.VI) "NHIỆT MAX (°C)" else "MAX TEMP (°C)"
     }
 

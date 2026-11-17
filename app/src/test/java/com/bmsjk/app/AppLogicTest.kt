@@ -1,22 +1,33 @@
 package com.bmsjk.app
 
+import com.bmsjk.app.ble.JkBleFilter
 import com.bmsjk.app.ble.MacPayloadParser
-import com.bmsjk.app.demo.DemoBmsSimulator
-import com.bmsjk.app.demo.DemoScenario
+import com.bmsjk.app.data.AppLanguage
+import com.bmsjk.app.ui.i18n.AppStrings
+import com.bmsjk.core.protocol.JkFrameCodec
 import com.bmsjk.core.session.BmsSessionEngine
 import com.bmsjk.core.session.InMemoryPasscodeStore
-import com.bmsjk.core.session.PasscodeStatus
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.UUID
 
 class AppLogicTest {
+
+    @Test
+    fun jkBleFilterAcceptsOnlyJkBmsDevicesAndRejectsUnrelatedPeripherals() {
+        assertTrue(JkBleFilter.isJkBmsDevice("JK-BD6A24S6PD", emptyList()))
+        assertTrue(JkBleFilter.isJkBmsDevice("JK_PB2A16S15P", emptyList()))
+        assertTrue(JkBleFilter.isJkBmsDevice(null, listOf(JkFrameCodec.SERVICE_UUID)))
+        assertTrue(JkBleFilter.isJkBmsDevice("CustomName", listOf(JkFrameCodec.SERVICE_UUID)))
+
+        assertFalse(JkBleFilter.isJkBmsDevice(null, emptyList()))
+        assertFalse(JkBleFilter.isJkBmsDevice("(Unknown BLE)", emptyList()))
+        assertFalse(JkBleFilter.isJkBmsDevice("Mi Band 7", emptyList()))
+        assertFalse(JkBleFilter.isJkBmsDevice("AirPods Pro", listOf(UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb"))))
+    }
 
     @Test
     fun macPayloadParserExtractsValidAddressesFromVariousFormats() {
@@ -27,32 +38,40 @@ class AppLogicTest {
     }
 
     @Test
-    fun demoSimulatorSyncsWithSessionEnginePasscodeAndTemperatureMasking() {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        try {
-            val engine = BmsSessionEngine(passcodeStore = InMemoryPasscodeStore())
-            val simulator = DemoBmsSimulator(engine, scope)
-            simulator.start(initialScenario = DemoScenario.IDLE)
+    fun dynamicCellLabelsAdaptFromNToActualCellCount() {
+        val vi = AppStrings.forLang(AppLanguage.VI)
+        val en = AppStrings.forLang(AppLanguage.EN)
 
-            // First connection requires passcode before exposing telemetry
-            assertTrue(engine.snapshot.value.passcodeStatus is PasscodeStatus.Required)
-            assertNull(engine.snapshot.value.telemetry)
+        assertEquals("N Cell", vi.cellsTabLabel(null))
+        assertEquals("N Cell", vi.cellsTabLabel(0))
+        assertEquals("16 Cell", vi.cellsTabLabel(16))
+        assertEquals("24 Cell", vi.cellsTabLabel(24))
+        assertEquals("Điện áp N Cell", vi.cellVoltagesTitle(null))
+        assertEquals("Điện áp 16 Cell", vi.cellVoltagesTitle(16))
 
-            assertTrue(engine.submitPasscode("1234") is PasscodeStatus.Unlocked)
-            simulator.emitSettingsAndCurrentCellsIfUnlocked()
+        assertEquals("N Cells", en.cellsTabLabel(null))
+        assertEquals("16 Cells", en.cellsTabLabel(16))
+        assertEquals("N-Cell Voltages", en.cellVoltagesTitle(null))
+        assertEquals("24-Cell Voltages", en.cellVoltagesTitle(24))
+    }
 
-            val telemetry = engine.snapshot.value.telemetry
-            assertNotNull(telemetry)
-            assertEquals(24, telemetry!!.enabledCellCount)
-            assertEquals(87, telemetry.socPercent)
-            // Disconnected T1..T4 probes (-200C) are masked to null, while T5 and MOS are preserved
-            assertNull(telemetry.temp1C)
-            assertNull(telemetry.temp4C)
-            assertNotNull(telemetry.temp5C)
-            assertNotNull(telemetry.mosfetTempC)
-            assertNotNull(engine.snapshot.value.settings)
-        } finally {
-            scope.cancel()
-        }
+    @Test
+    fun garbageDataFromNonJkDeviceDoesNotThrowInSessionEngine() {
+        val engine = BmsSessionEngine(passcodeStore = InMemoryPasscodeStore())
+        engine.startSession("AA:BB:CC:DD:EE:FF")
+
+        // Random bytes without 55 AA EB 90 header
+        assertNull(engine.onNotificationChunk(byteArrayOf(0x12, 0x34, 0x56, 0x78)))
+
+        // Header followed by corrupted 300-byte payload (bad CRC)
+        val corrupted = ByteArray(300)
+        corrupted[0] = 0x55
+        corrupted[1] = 0xAA.toByte()
+        corrupted[2] = 0xEB.toByte()
+        corrupted[3] = 0x90.toByte()
+        corrupted[4] = 0x02
+        corrupted[299] = 0xFF.toByte() // wrong CRC
+        assertNull(engine.onNotificationChunk(corrupted))
+        assertEquals(1L, engine.snapshot.value.crcErrorCount)
     }
 }

@@ -71,9 +71,7 @@ fun ConnectTab(
     onConnectQrPayload: (String) -> Boolean,
     onDisconnect: () -> Unit,
     onSubmitPasscode: (String) -> Unit,
-    onForgetPasscode: () -> Unit,
-    onStartDemo: () -> Unit,
-    onCycleDemoScenario: () -> Unit
+    onForgetPasscode: () -> Unit
 ) {
     val scroll = rememberScrollState()
     var showQrDialog by rememberSaveable { mutableStateOf(false) }
@@ -125,7 +123,7 @@ fun ConnectTab(
             }
         }
 
-        // Search + One-shot Scan + QR/MAC + Demo 24S
+        // Search + One-shot JK BMS Scan + QR/MAC
         OledCard(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = state.searchQuery,
@@ -168,12 +166,6 @@ fun ConnectTab(
                     highlighted = false,
                     onClick = { showQrDialog = true }
                 )
-                ActionPillButton(
-                    icon = AppIcons.Bolt,
-                    label = if (state.isDemoMode) "${strings.demoScenarioSwitch} (${state.demoScenario.name})" else strings.demoModeLabel,
-                    highlighted = state.isDemoMode,
-                    onClick = { if (state.isDemoMode) onCycleDemoScenario() else onStartDemo() }
-                )
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -183,7 +175,7 @@ fun ConnectTab(
             )
         }
 
-        // Active connection summary card
+        // Active / Error connection summary card
         val conn = state.connectionState
         if (conn !is BleConnectionState.Disconnected) {
             val connAddress = when (conn) {
@@ -204,7 +196,8 @@ fun ConnectTab(
 
             OledCard(
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = if (isError) OledTokens.DangerRed else OledTokens.Accent.copy(alpha = 0.55f)
+                borderColor = if (isError) OledTokens.DangerRed else OledTokens.Accent.copy(alpha = 0.55f),
+                containerColor = if (isError) OledTokens.DangerSoft else OledTokens.Card
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -221,7 +214,7 @@ fun ConnectTab(
                             Text(
                                 text = connName,
                                 color = OledTokens.Text,
-                                fontSize = 12.5.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             if (connAddress.isNotEmpty()) {
@@ -237,7 +230,11 @@ fun ConnectTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         StatusPill(
-                            text = if (conn is BleConnectionState.Connected) strings.connectedBadge else strings.connectingBadge,
+                            text = when {
+                                isError -> strings.errorBadge
+                                conn is BleConnectionState.Connected -> strings.connectedBadge
+                                else -> strings.connectingBadge
+                            },
                             textColor = if (isError) OledTokens.DangerRed else OledTokens.Accent,
                             borderColor = if (isError) OledTokens.DangerRed else OledTokens.Accent
                         )
@@ -343,7 +340,17 @@ fun ConnectTab(
             }
         }
 
-        // Discovered BLE devices list
+        // Discovered JK BMS devices list
+        if (state.scannedDevices.isEmpty() && !state.isScanning && state.scanCompletedOnce) {
+            OledCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = strings.noBmsFoundHint,
+                    color = OledTokens.Muted,
+                    fontSize = 11.5.sp
+                )
+            }
+        }
+
         for (device in state.scannedDevices) {
             OledCard(modifier = Modifier.fillMaxWidth()) {
                 Row(

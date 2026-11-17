@@ -29,10 +29,10 @@ import kotlinx.coroutines.launch
 
 /**
  * Battery-conscious Android BLE manager for strictly read-only JK BMS communication.
+ * - Filters scan results strictly to JK BMS devices ([JkBleFilter]).
  * - One-shot BLE scanning (never continuously polls in background).
  * - Preserves active GATT connection while scanning or navigating tabs.
- * - Resolves dual-0xFFE1 characteristics by WRITE and NOTIFY properties.
- * - Sends only 0x97 (Device Info) and 0x96 (Cell/Settings Info) commands.
+ * - Guards all GATT / BLE / frame operations against unknown or misbehaving devices.
  */
 @SuppressLint("MissingPermission")
 class JkBleManager(
@@ -61,18 +61,24 @@ class JkBleManager(
     private val discoveredMap = LinkedHashMap<String, BleDeviceItem>()
     private var scanStopJob: Job? = null
     private var pollJob: Job? = null
+    private var handshakeTimeoutJob: Job? = null
     private var activeGatt: BluetoothGatt? = null
     private var writeChar: BluetoothGattCharacteristic? = null
     private var notifyChar: BluetoothGattCharacteristic? = null
+
     @Volatile
     private var lastCellRxMs: Long = 0L
 
-    fun isBluetoothEnabled(): Boolean = bluetoothAdapter?.isEnabled == true
+    @Volatile
+    private var receivedValidBmsFrame: Boolean = false
+
+    fun isBluetoothEnabled(): Boolean =
+        runCatching { bluetoothAdapter?.isEnabled == true }.getOrDefault(false)
 
     fun startOneShotScan(durationMs: Long = 8_000L) {
         val adapter = bluetoothAdapter
-        val scanner = adapter?.bluetoothLeScanner
-        if (adapter == null || !adapter.isEnabled || scanner == null) {
+        val scanner = runCatching { adapter?.bluetoothLeScanner }.getOrNull()
+        if (adapter == null || !isBluetoothEnabled() || scanner == null) {
             _isScanning.value = false
             return
         }
@@ -86,15 +92,18 @@ class JkBleManager(
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
-        runCatching {
+        try {
             scanner.startScan(null, settings, scanCallback)
             scanStopJob = scope.launch {
                 delay(durationMs)
                 stopScanInternal()
                 _scanCompletedOnce.value = true
             }
-        }.onFailure {
+        } catch (t: Throwable) {
             _isScanning.value = false
+            _connectionState.value = BleConnectionState.Error(
+                t.message ?: "Unable to start BLE scan"
+            )
         }
     }
 
@@ -116,19 +125,21 @@ class JkBleManager(
 
     fun connect(address: String, displayName: String? = null) {
         val adapter = bluetoothAdapter
-        if (adapter == null || !adapter.isEnabled) {
+        if (adapter == null || !isBluetoothEnabled()) {
             _connectionState.value = BleConnectionState.Error("Bluetooth is disabled")
             return
         }
 
         val normalized = address.trim().uppercase()
-        val device = runCatching { adapter.getRemoteDevice(normalized) }.getOrNull()
-        if (device == null) {
-            _connectionState.value = BleConnectionState.Error("Invalid MAC address: $normalized")
+        val device = try {
+            adapter.getRemoteDevice(normalized)
+        } catch (t: Throwable) {
+            _connectionState.value = BleConnectionState.Error(
+                "Invalid BLE address ($normalized): ${t.message ?: "bad format"}"
+            )
             return
         }
 
-        // Stop scan to keep connection stable, and close any previous GATT first.
         stopScanInternal()
         closeGattInternal()
 
@@ -138,14 +149,32 @@ class JkBleManager(
 
         engine.startSession(normalized)
         lastCellRxMs = 0L
+        receivedValidBmsFrame = false
         _connectionState.value = BleConnectionState.Connecting(normalized, label)
 
-        activeGatt = device.connectGatt(
-            appContext,
-            false,
-            gattCallback,
-            BluetoothDevice.TRANSPORT_LE
-        )
+        try {
+            val gatt = device.connectGatt(
+                appContext,
+                false,
+                gattCallback,
+                BluetoothDevice.TRANSPORT_LE
+            )
+            if (gatt == null) {
+                _connectionState.value = BleConnectionState.Error("Failed to open GATT connection to $label")
+                return
+            }
+            activeGatt = gatt
+        } catch (sec: SecurityException) {
+            closeGattInternal()
+            _connectionState.value = BleConnectionState.Error(
+                "Missing Bluetooth permission: ${sec.message ?: "denied"}"
+            )
+        } catch (t: Throwable) {
+            closeGattInternal()
+            _connectionState.value = BleConnectionState.Error(
+                "Connection failed: ${t.message ?: t::class.java.simpleName}"
+            )
+        }
     }
 
     fun disconnect() {
@@ -160,7 +189,14 @@ class JkBleManager(
         writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
     }
 
+    private fun failConnection(reason: String) {
+        closeGattInternal()
+        _connectionState.value = BleConnectionState.Error(reason)
+    }
+
     private fun closeGattInternal() {
+        handshakeTimeoutJob?.cancel()
+        handshakeTimeoutJob = null
         pollJob?.cancel()
         pollJob = null
         writeChar = null
@@ -175,106 +211,136 @@ class JkBleManager(
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val dev = result.device ?: return
-            val addr = dev.address?.uppercase() ?: return
-            val name = result.scanRecord?.deviceName
-                ?: runCatching { dev.name }.getOrNull()
-                ?: "(Unknown BLE)"
-            val uuids = result.scanRecord?.serviceUuids.orEmpty()
-            val hasJk = uuids.any { it == ParcelUuid(JkFrameCodec.SERVICE_UUID) } ||
-                name.contains("JK", ignoreCase = true)
+            try {
+                val dev = result.device ?: return
+                val addr = dev.address?.uppercase() ?: return
+                val rawName = result.scanRecord?.deviceName
+                    ?: runCatching { dev.name }.getOrNull()
+                val uuids = result.scanRecord?.serviceUuids.orEmpty().map { it.uuid }
 
-            discoveredMap[addr] = BleDeviceItem(
-                address = addr,
-                name = name,
-                rssi = result.rssi,
-                hasJkService = hasJk
-            )
+                if (!JkBleFilter.isJkBmsDevice(rawName, uuids)) {
+                    return
+                }
 
-            _scannedDevices.value = discoveredMap.values.sortedWith(
-                compareByDescending<BleDeviceItem> { it.hasJkService }
-                    .thenByDescending { it.rssi }
-            )
+                val hasJkService = uuids.any { it == JkFrameCodec.SERVICE_UUID }
+                val displayName = rawName?.takeIf { it.isNotBlank() } ?: "JK BMS ($addr)"
+
+                discoveredMap[addr] = BleDeviceItem(
+                    address = addr,
+                    name = displayName,
+                    rssi = result.rssi,
+                    hasJkService = hasJkService
+                )
+
+                _scannedDevices.value = discoveredMap.values.sortedWith(
+                    compareByDescending<BleDeviceItem> { it.hasJkService }
+                        .thenByDescending { it.rssi }
+                )
+            } catch (_: Throwable) {
+                // Ignore malformed advertisement packets from nearby BLE devices
+            }
         }
 
         override fun onScanFailed(errorCode: Int) {
             _isScanning.value = false
+            _connectionState.value = BleConnectionState.Error("BLE scan failed (code=$errorCode)")
         }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            val addr = gatt.device?.address?.uppercase() ?: ""
-            val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
-            if (status != BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_DISCONNECTED) {
-                closeGattInternal()
-                _connectionState.value = BleConnectionState.Error("GATT disconnected (status=$status)")
-                return
-            }
+            try {
+                val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
+                val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
 
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    _connectionState.value = BleConnectionState.Discovering(addr, name)
-                    if (!gatt.requestMtu(247)) {
-                        gatt.discoverServices()
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    failConnection("BLE GATT error (status=$status) on $name")
+                    return
+                }
+
+                when (newState) {
+                    BluetoothProfile.STATE_CONNECTED -> {
+                        _connectionState.value = BleConnectionState.Discovering(addr, name)
+                        val mtuRequested = runCatching { gatt.requestMtu(247) }.getOrDefault(false)
+                        if (!mtuRequested && !gatt.discoverServices()) {
+                            failConnection("Unable to start service discovery on $name")
+                        }
+                    }
+                    BluetoothProfile.STATE_DISCONNECTED -> {
+                        closeGattInternal()
+                        _connectionState.value = BleConnectionState.Disconnected
                     }
                 }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    closeGattInternal()
-                    _connectionState.value = BleConnectionState.Disconnected
-                }
+            } catch (t: Throwable) {
+                failConnection("GATT state error: ${t.message ?: t::class.java.simpleName}")
             }
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-            gatt.discoverServices()
+            try {
+                if (!gatt.discoverServices()) {
+                    failConnection("Unable to discover BLE services after MTU")
+                }
+            } catch (t: Throwable) {
+                failConnection("Service discovery error: ${t.message ?: t::class.java.simpleName}")
+            }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            val addr = gatt.device?.address?.uppercase() ?: ""
-            val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                closeGattInternal()
-                _connectionState.value = BleConnectionState.Error("Service discovery failed ($status)")
-                return
-            }
+            try {
+                val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
+                val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    failConnection("Service discovery failed (status=$status)")
+                    return
+                }
 
-            val service = gatt.getService(JkFrameCodec.SERVICE_UUID)
-            if (service == null) {
-                closeGattInternal()
-                _connectionState.value = BleConnectionState.Error("Service 0xFFE0 not found")
-                return
-            }
+                val service = gatt.getService(JkFrameCodec.SERVICE_UUID)
+                if (service == null) {
+                    failConnection("Not a JK BMS device: missing service 0xFFE0")
+                    return
+                }
 
-            val candidates = service.characteristics.filter {
-                it.uuid == JkFrameCodec.CHARACTERISTIC_UUID
-            }
+                val candidates = service.characteristics.filter {
+                    it.uuid == JkFrameCodec.CHARACTERISTIC_UUID
+                }
+                if (candidates.isEmpty()) {
+                    failConnection("Not a JK BMS device: missing characteristic 0xFFE1")
+                    return
+                }
 
-            val wChar = candidates.firstOrNull { char ->
-                (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0 ||
-                    (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0
-            }
-            val nChar = candidates.firstOrNull { char ->
-                (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0 ||
-                    (char.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
-            } ?: wChar
+                val wChar = candidates.firstOrNull { char ->
+                    (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0 ||
+                        (char.properties and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0
+                }
+                val nChar = candidates.firstOrNull { char ->
+                    (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0 ||
+                        (char.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+                } ?: wChar
 
-            if (wChar == null || nChar == null) {
-                closeGattInternal()
-                _connectionState.value = BleConnectionState.Error("0xFFE1 write/notify handles not found")
-                return
-            }
+                if (wChar == null || nChar == null) {
+                    failConnection("Incompatible BLE module: missing write/notify on 0xFFE1")
+                    return
+                }
 
-            writeChar = wChar
-            notifyChar = nChar
-            gatt.setCharacteristicNotification(nChar, true)
+                writeChar = wChar
+                notifyChar = nChar
+                if (!gatt.setCharacteristicNotification(nChar, true)) {
+                    failConnection("Failed to enable local notifications on 0xFFE1")
+                    return
+                }
 
-            val cccd = nChar.getDescriptor(JkFrameCodec.CCCD_UUID)
-            if (cccd != null) {
-                writeDescriptorCompat(gatt, cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-            } else {
-                _connectionState.value = BleConnectionState.Connected(addr, name)
-                beginHandshake(gatt, wChar)
+                val cccd = nChar.getDescriptor(JkFrameCodec.CCCD_UUID)
+                if (cccd != null) {
+                    if (!writeDescriptorCompat(gatt, cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
+                        failConnection("Failed to write CCCD descriptor on 0xFFE1")
+                    }
+                } else {
+                    _connectionState.value = BleConnectionState.Connected(addr, name)
+                    beginHandshake(gatt, wChar)
+                }
+            } catch (t: Throwable) {
+                failConnection("Unsupported device or GATT error: ${t.message ?: t::class.java.simpleName}")
             }
         }
 
@@ -283,11 +349,19 @@ class JkBleManager(
             descriptor: BluetoothGattDescriptor,
             status: Int
         ) {
-            val addr = gatt.device?.address?.uppercase() ?: ""
-            val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
-            val wChar = writeChar ?: return
-            _connectionState.value = BleConnectionState.Connected(addr, name)
-            beginHandshake(gatt, wChar)
+            try {
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    failConnection("Failed to subscribe JK BMS notifications (status=$status)")
+                    return
+                }
+                val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
+                val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
+                val wChar = writeChar ?: return
+                _connectionState.value = BleConnectionState.Connected(addr, name)
+                beginHandshake(gatt, wChar)
+            } catch (t: Throwable) {
+                failConnection("Handshake setup failed: ${t.message ?: t::class.java.simpleName}")
+            }
         }
 
         @Deprecated("Deprecated in API 33")
@@ -310,26 +384,46 @@ class JkBleManager(
     }
 
     private fun handleIncomingChunk(gatt: BluetoothGatt, chunk: ByteArray) {
-        val decoded = engine.onNotificationChunk(chunk) ?: return
-        when (decoded) {
-            is DecodedFrame.DeviceInfoFrame -> {
-                if (engine.snapshot.value.isUnlocked) {
-                    writeChar?.let { wChar ->
-                        writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
+        try {
+            val decoded = engine.onNotificationChunk(chunk) ?: return
+            receivedValidBmsFrame = true
+            handshakeTimeoutJob?.cancel()
+            when (decoded) {
+                is DecodedFrame.DeviceInfoFrame -> {
+                    if (engine.snapshot.value.isUnlocked) {
+                        writeChar?.let { wChar ->
+                            writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
+                        }
                     }
                 }
+                is DecodedFrame.CellInfoFrame -> {
+                    lastCellRxMs = System.currentTimeMillis()
+                }
+                is DecodedFrame.SettingsFrame,
+                is DecodedFrame.UnsupportedFrame -> Unit
             }
-            is DecodedFrame.CellInfoFrame -> {
-                lastCellRxMs = System.currentTimeMillis()
-            }
-            is DecodedFrame.SettingsFrame,
-            is DecodedFrame.UnsupportedFrame -> Unit
+        } catch (t: Throwable) {
+            failConnection("Incompatible telemetry stream: ${t.message ?: t::class.java.simpleName}")
         }
     }
 
     private fun beginHandshake(gatt: BluetoothGatt, wChar: BluetoothGattCharacteristic) {
-        writeReadCommand(gatt, wChar, engine.nextReadDeviceInfoFrame())
+        if (!writeReadCommand(gatt, wChar, engine.nextReadDeviceInfoFrame())) {
+            failConnection("Failed to send JK BMS read handshake (0x97)")
+            return
+        }
+        startHandshakeWatchdog()
         startPollLoop(gatt, wChar)
+    }
+
+    private fun startHandshakeWatchdog() {
+        handshakeTimeoutJob?.cancel()
+        handshakeTimeoutJob = scope.launch {
+            delay(7_000L)
+            if (!receivedValidBmsFrame && activeGatt != null) {
+                failConnection("No valid JK BMS response received — device is not a compatible JK BMS")
+            }
+        }
     }
 
     private fun startPollLoop(gatt: BluetoothGatt, wChar: BluetoothGattCharacteristic) {
@@ -354,23 +448,28 @@ class JkBleManager(
         gatt: BluetoothGatt,
         characteristic: BluetoothGattCharacteristic,
         command: ByteArray
-    ) {
-        val writeType =
-            if ((characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0) {
-                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            } else {
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            }
+    ): Boolean {
+        return try {
+            val writeType =
+                if ((characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0) {
+                    BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                } else {
+                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeCharacteristic(characteristic, command, writeType)
-        } else {
-            @Suppress("DEPRECATION")
-            characteristic.writeType = writeType
-            @Suppress("DEPRECATION")
-            characteristic.value = command
-            @Suppress("DEPRECATION")
-            gatt.writeCharacteristic(characteristic)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val res = gatt.writeCharacteristic(characteristic, command, writeType)
+                res == android.bluetooth.BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                characteristic.writeType = writeType
+                @Suppress("DEPRECATION")
+                characteristic.value = command
+                @Suppress("DEPRECATION")
+                gatt.writeCharacteristic(characteristic)
+            }
+        } catch (_: Throwable) {
+            false
         }
     }
 
@@ -378,14 +477,19 @@ class JkBleManager(
         gatt: BluetoothGatt,
         descriptor: BluetoothGattDescriptor,
         value: ByteArray
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeDescriptor(descriptor, value)
-        } else {
-            @Suppress("DEPRECATION")
-            descriptor.value = value
-            @Suppress("DEPRECATION")
-            gatt.writeDescriptor(descriptor)
+    ): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val res = gatt.writeDescriptor(descriptor, value)
+                res == android.bluetooth.BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                descriptor.value = value
+                @Suppress("DEPRECATION")
+                gatt.writeDescriptor(descriptor)
+            }
+        } catch (_: Throwable) {
+            false
         }
     }
 }

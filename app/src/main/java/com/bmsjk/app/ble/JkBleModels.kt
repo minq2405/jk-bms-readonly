@@ -1,5 +1,8 @@
 package com.bmsjk.app.ble
 
+import com.bmsjk.core.protocol.JkFrameCodec
+import java.util.UUID
+
 data class BleDeviceItem(
     val address: String,
     val name: String,
@@ -13,6 +16,25 @@ sealed interface BleConnectionState {
     data class Discovering(val address: String, val name: String) : BleConnectionState
     data class Connected(val address: String, val name: String) : BleConnectionState
     data class Error(val message: String) : BleConnectionState
+}
+
+/**
+ * Strictly filters BLE scan results to Jikong (JK) BMS devices so unrelated
+ * peripherals (watches, headphones, TVs, phones) are excluded from the Connect list.
+ */
+object JkBleFilter {
+    fun isJkBmsDevice(name: String?, serviceUuids: List<UUID>): Boolean {
+        if (serviceUuids.any { it == JkFrameCodec.SERVICE_UUID }) {
+            return true
+        }
+        val cleanName = name?.trim().orEmpty()
+        if (cleanName.isEmpty()) return false
+        return cleanName.startsWith("JK", ignoreCase = true) ||
+            cleanName.contains("JKBMS", ignoreCase = true) ||
+            cleanName.contains("JK-B", ignoreCase = true) ||
+            cleanName.contains("JK_B", ignoreCase = true) ||
+            cleanName.contains("JK_", ignoreCase = true)
+    }
 }
 
 /**

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -65,9 +64,7 @@ fun DashboardShell(
     onConnectQrPayload: (String) -> Boolean,
     onDisconnect: () -> Unit,
     onSubmitPasscode: (String) -> Unit,
-    onForgetPasscode: () -> Unit,
-    onStartDemo: () -> Unit,
-    onCycleDemoScenario: () -> Unit
+    onForgetPasscode: () -> Unit
 ) {
     val strings = AppStrings.forLang(state.language)
 
@@ -105,8 +102,7 @@ fun DashboardShell(
             AppHeaderBar(
                 state = state,
                 strings = strings,
-                compact = isCompactSplit50,
-                onToggleDemoScenario = if (state.isDemoMode) onCycleDemoScenario else null
+                compact = isCompactSplit50
             )
 
             if (useNavRail) {
@@ -117,6 +113,7 @@ fun DashboardShell(
                 ) {
                     AppNavigationRail(
                         selectedTab = state.selectedTab,
+                        activeCellCount = state.activeCellCount,
                         strings = strings,
                         onSelectTab = onSelectTab
                     )
@@ -147,9 +144,7 @@ fun DashboardShell(
                             onConnectQrPayload = onConnectQrPayload,
                             onDisconnect = onDisconnect,
                             onSubmitPasscode = onSubmitPasscode,
-                            onForgetPasscode = onForgetPasscode,
-                            onStartDemo = onStartDemo,
-                            onCycleDemoScenario = onCycleDemoScenario
+                            onForgetPasscode = onForgetPasscode
                         )
                     }
                 }
@@ -181,14 +176,13 @@ fun DashboardShell(
                         onConnectQrPayload = onConnectQrPayload,
                         onDisconnect = onDisconnect,
                         onSubmitPasscode = onSubmitPasscode,
-                        onForgetPasscode = onForgetPasscode,
-                        onStartDemo = onStartDemo,
-                        onCycleDemoScenario = onCycleDemoScenario
+                        onForgetPasscode = onForgetPasscode
                     )
                 }
 
                 AppBottomNavBar(
                     selectedTab = state.selectedTab,
+                    activeCellCount = state.activeCellCount,
                     strings = strings,
                     compactSplit50 = isCompactSplit50,
                     compact320 = compact320,
@@ -222,9 +216,7 @@ private fun ActiveTabContent(
     onConnectQrPayload: (String) -> Boolean,
     onDisconnect: () -> Unit,
     onSubmitPasscode: (String) -> Unit,
-    onForgetPasscode: () -> Unit,
-    onStartDemo: () -> Unit,
-    onCycleDemoScenario: () -> Unit
+    onForgetPasscode: () -> Unit
 ) {
     when (state.selectedTab) {
         AppTab.MONITOR -> MonitorTab(
@@ -268,9 +260,7 @@ private fun ActiveTabContent(
             onConnectQrPayload = onConnectQrPayload,
             onDisconnect = onDisconnect,
             onSubmitPasscode = onSubmitPasscode,
-            onForgetPasscode = onForgetPasscode,
-            onStartDemo = onStartDemo,
-            onCycleDemoScenario = onCycleDemoScenario
+            onForgetPasscode = onForgetPasscode
         )
     }
 }
@@ -279,8 +269,7 @@ private fun ActiveTabContent(
 private fun AppHeaderBar(
     state: BmsUiState,
     strings: UiStrings,
-    compact: Boolean,
-    onToggleDemoScenario: (() -> Unit)?
+    compact: Boolean
 ) {
     val activeTitle = state.session.deviceInfo?.deviceName?.takeIf { it.isNotBlank() }
         ?: state.session.deviceInfo?.vendorModel?.takeIf { it.isNotBlank() }
@@ -317,29 +306,7 @@ private fun AppHeaderBar(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (onToggleDemoScenario != null) {
-                        Surface(
-                            color = OledTokens.AccentSoft,
-                            shape = RoundedCornerShape(999.dp),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .clickable { onToggleDemoScenario() }
-                        ) {
-                            Text(
-                                text = "DEMO: ${state.demoScenario.name}",
-                                color = OledTokens.Accent,
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                    ReadOnlyPill(label = strings.readOnly)
-                }
+                ReadOnlyPill(label = strings.readOnly)
             }
             HorizontalDivider(color = OledTokens.CardBorder, thickness = 1.dp)
         }
@@ -349,6 +316,7 @@ private fun AppHeaderBar(
 @Composable
 private fun AppBottomNavBar(
     selectedTab: AppTab,
+    activeCellCount: Int?,
     strings: UiStrings,
     compactSplit50: Boolean,
     compact320: Boolean,
@@ -370,7 +338,7 @@ private fun AppBottomNavBar(
                     val active = tab == selectedTab
                     NavItemBox(
                         icon = tabIcon(tab),
-                        label = tabLabel(tab, strings),
+                        label = tabLabel(tab, activeCellCount, strings),
                         active = active,
                         fontSizeSp = if (compact320 || compactSplit50) 9.5f else 10.5f,
                         minHeightDp = if (compactSplit50) 44 else 48,
@@ -386,6 +354,7 @@ private fun AppBottomNavBar(
 @Composable
 private fun AppNavigationRail(
     selectedTab: AppTab,
+    activeCellCount: Int?,
     strings: UiStrings,
     onSelectTab: (AppTab) -> Unit
 ) {
@@ -401,7 +370,7 @@ private fun AppNavigationRail(
                 for (tab in AppTab.entries) {
                     NavItemBox(
                         icon = tabIcon(tab),
-                        label = tabLabel(tab, strings),
+                        label = tabLabel(tab, activeCellCount, strings),
                         active = tab == selectedTab,
                         fontSizeSp = 9.5f,
                         minHeightDp = 48,
@@ -465,9 +434,9 @@ private fun tabIcon(tab: AppTab): ImageVector = when (tab) {
     AppTab.CONNECT -> AppIcons.Bluetooth
 }
 
-private fun tabLabel(tab: AppTab, strings: UiStrings): String = when (tab) {
+private fun tabLabel(tab: AppTab, activeCellCount: Int?, strings: UiStrings): String = when (tab) {
     AppTab.MONITOR -> strings.monitor
-    AppTab.CELLS -> strings.cells
+    AppTab.CELLS -> strings.cellsTabLabel(activeCellCount)
     AppTab.CHARTS -> strings.chart
     AppTab.SETTINGS -> strings.settings
     AppTab.CONNECT -> strings.connect
