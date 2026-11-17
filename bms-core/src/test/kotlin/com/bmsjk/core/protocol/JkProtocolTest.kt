@@ -206,6 +206,13 @@ class JkProtocolTest {
         frame[144] = 0x5E
         frame[145] = 0x01
 
+        // Disconnected T1 (-200.0C = -2000 = 0xF830) at 130+32 = 162..163
+        frame[162] = 0x30
+        frame[163] = 0xF8.toByte()
+        // Connected T5 (34.4C = 344 = 0x0158) at 222+32 = 254..255
+        frame[254] = 0x58
+        frame[255] = 0x01
+
         // Pack voltage at 150..153 = 80.400V (80400 = 0x00013A10)
         frame[150] = 0x10
         frame[151] = 0x3A
@@ -234,6 +241,8 @@ class JkProtocolTest {
         assertEquals(-12.500f, telemetry.currentA!!, 0.001f)
         assertEquals(-1005.0f, telemetry.powerW!!, 0.5f)
         assertEquals(35.0f, telemetry.mosfetTempC!!, 0.1f)
+        assertNull(telemetry.temp1C)
+        assertEquals(34.4f, telemetry.temp5C!!, 0.1f)
         assertEquals(76, telemetry.socPercent)
         assertEquals(ChargeStatus.FLOAT, telemetry.chargeStatus)
     }

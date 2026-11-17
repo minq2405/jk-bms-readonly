@@ -37,14 +37,6 @@
     color: #f1f5f9;
     min-height: 100vh;
   }
-  body.theme-light {
-    --app-bg: #ecfeff;
-    --app-card: #ffffff;
-    --app-card-elevated: #f8fafc;
-    --app-card-border: #a5f3fc;
-    --app-text: #0f172a;
-    --app-muted: #334155;
-  }
 
   .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
   svg.ico { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
@@ -247,9 +239,9 @@
     gap: 4px;
   }
   .pill-btn {
-    min-height: 30px;
+    min-height: 36px;
     font-size: 10.5px;
-    padding: 3px 9px;
+    padding: 4px 10px;
     border-radius: 999px;
     background: var(--app-card-elevated);
     border: 1px solid var(--app-card-border);
@@ -259,6 +251,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    flex-shrink: 0;
   }
   .pill-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
@@ -290,14 +283,15 @@
     gap: 6px;
     margin-bottom: 7px;
   }
-  .card-label-left { display: inline-flex; align-items: center; gap: 5px; }
+  .card-label-left { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 
-  /* Full-width balanced rows inside span:2 cards */
+  /* Full-width balanced rows inside span:2 cards (safe wrap on ultra-narrow widths) */
   .card-row-split {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 10px 12px;
   }
   .big-val {
     font-family: var(--font-num);
@@ -318,6 +312,7 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 3px;
+    margin-left: auto;
   }
 
   .mos-pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -335,26 +330,26 @@
     color: #4ade80;
     border-color: rgba(34, 197, 94, 0.42);
   }
-  body.theme-light .mos-on { background: #dcfce7; color: #15803d; border-color: #86efac; }
   .mos-warn {
     background: rgba(245, 158, 11, 0.15);
     color: #fbbf24;
     border-color: rgba(245, 158, 11, 0.45);
   }
-  body.theme-light .mos-warn { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
 
-  /* 24-Cell Grid (4 cols) */
+  /* 24-Cell Grid (4 cols default, adaptive via classes) */
   .cell-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .app-compact .cell-grid { grid-template-columns: repeat(3, 1fr); }
+  .app-tablet .cell-grid { grid-template-columns: repeat(6, 1fr); }
   .cell-item {
     background: var(--app-card-elevated);
     border: 1px solid var(--app-card-border);
     border-radius: 8px;
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 10.5px;
   }
   .cell-item.is-max { border-color: #0891b2; background: rgba(34, 211, 238, 0.14); }
   .cell-item.is-min { border-color: #d97706; background: rgba(245, 158, 11, 0.14); }
-  .cell-top { display: flex; justify-content: space-between; color: var(--app-muted); font-size: 9.5px; font-weight: 600; }
+  .cell-top { display: flex; justify-content: space-between; color: var(--app-muted); font-size: 10.5px; font-weight: 600; }
   .cell-v { font-family: var(--font-num); font-weight: 700; font-size: 11px; margin-top: 2px; }
   .cell-bar-bg { height: 3px; background: rgba(148,163,184,0.22); border-radius: 2px; margin-top: 3px; overflow: hidden; }
   .cell-bar-fill { height: 100%; border-radius: 2px; }
@@ -368,13 +363,14 @@
     gap: 6px;
     flex-shrink: 0;
   }
+  .app-compact .app-bottom-nav { padding: 4px 5px; gap: 3px; }
   .nav-item {
     flex: 1;
-    min-height: 46px;
+    min-height: 48px;
     border: none;
     background: transparent;
     color: var(--app-muted);
-    font-size: 9.5px;
+    font-size: 10.5px;
     font-weight: 600;
     font-family: var(--font-ui);
     padding: 4px 2px;
@@ -387,7 +383,33 @@
     gap: 3px;
     white-space: nowrap;
   }
+  .app-compact .nav-item { font-size: 9.5px; }
   .nav-item.active { background: var(--accent-soft); color: var(--accent); }
+
+  /* Navigation Rail for Landscape & Tablet */
+  .app-body-with-rail {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .app-nav-rail {
+    width: 62px;
+    border-right: 1px solid var(--app-card-border);
+    background: var(--app-card);
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .app-nav-rail .nav-item {
+    flex: 1;
+    min-height: 48px;
+    font-size: 9.5px;
+    padding: 4px 2px;
+  }
 
   /* 30% Strip HUD */
   .hud-strip {
@@ -397,10 +419,13 @@
     flex-direction: column;
     justify-content: space-between;
     gap: 5px;
+    overflow-y: auto;
+    min-height: 0;
   }
   .hud-top-row {
     display: flex; align-items: center; justify-content: space-between;
     font-size: 11px; color: var(--app-muted);
+    flex-shrink: 0;
   }
   .hud-main-row {
     flex: 1;
@@ -431,9 +456,37 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    min-width: 0;
   }
-  .hud-mini-label { font-size: 10px; color: var(--app-muted); display: flex; align-items: center; gap: 4px; font-weight: 600; }
+  .hud-mini-label { font-size: 10.5px; color: var(--app-muted); display: flex; align-items: center; gap: 4px; font-weight: 600; }
   .hud-mini-val { font-family: var(--font-num); font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+  /* Compact 50/50 Split: Fit SOC + Power + Temps&MOS together on screen */
+  .app-split50 .app-header { min-height: 34px; padding: 3px 10px; }
+  .app-split50 .app-bottom-nav { padding: 2px 6px; }
+  .app-split50 .nav-item { min-height: 44px; padding: 2px; gap: 2px; font-size: 10px; }
+  .app-split50 .app-scroll { padding: 6px; gap: 6px; }
+  .app-split50 .card { padding: 6px 10px; }
+  .app-split50 .card-label { font-size: 10.5px; margin-bottom: 4px; line-height: 1.2; }
+  .app-split50 .soc-ring-svg { width: 54px; height: 54px; }
+  .app-split50 .power-arc-svg { width: 80px; height: 44px; }
+  .app-split50 .big-val { font-size: 19px; }
+  .app-split50 .sub-val { font-size: 10.5px; margin-top: 1px; }
+  .app-split50 .kpi-right { gap: 1px; }
+  .app-split50 .mos-pills { gap: 4px; }
+  .app-split50 .mos-pill { font-size: 10px; padding: 2px 6px; border-radius: 6px; line-height: 1.3; }
+
+  /* Non-distorting Chart Dot */
+  .chart-wrap { position: relative; width: 100%; }
+  .chart-dot {
+    position: absolute;
+    right: -3px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
 
   /* Secondary screens */
   .ro-group {
@@ -442,12 +495,11 @@
     border-radius: 12px;
     padding: 8px 10px;
   }
-  .ro-group-title { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 5px; display: flex; justify-content: space-between; }
-  body.theme-light .ro-group-title { color: #0e7490; }
-  .ro-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--app-card-border); font-size: 11px; }
+  .ro-group-title { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 5px; display: flex; justify-content: space-between; gap: 8px; }
+  .ro-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 4px 0; border-bottom: 1px dashed var(--app-card-border); font-size: 11px; }
   .ro-row:last-child { border-bottom: none; }
   .ro-k { color: var(--app-muted); }
-  .ro-v { font-family: var(--font-num); font-weight: 700; }
+  .ro-v { font-family: var(--font-num); font-weight: 700; text-align: right; margin-left: auto; }
 
   .pass-input {
     width: 100%;
@@ -478,6 +530,50 @@
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
+  .wide-2col-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .wide-2col-top .big-val { font-size: 17px; }
+  .wide-2col-top .sub-val { font-size: 10.5px; }
+  .wide-2col-top .kpi-right {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+    margin-left: 0;
+    padding-top: 6px;
+    border-top: 1px dashed var(--app-card-border);
+  }
+  .tablet-bento {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 8px;
+    align-items: start;
+  }
+  .connect-search-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .connect-search-box {
+    flex: 1 1 150px;
+    min-width: 0;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--app-card-elevated);
+    border: 1px solid var(--app-card-border);
+    border-radius: 9px;
+    padding: 6px 9px;
+    font-size: 11.5px;
+    color: var(--app-muted);
+  }
 </style>
 </head>
 <body>
@@ -491,7 +587,7 @@
   <div class="actions">
     <button class="btn" id="btnScenario" onclick="cycleScenario()"></button>
     <button class="btn" id="btnLang" onclick="toggleLang()"></button>
-    <button class="btn" id="btnTheme" onclick="toggleTheme()"></button>
+    <span class="tag" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:5px 10px;">OLED Dark</span>
   </div>
 </div>
 
@@ -545,6 +641,7 @@ const I18N = {
   vi: {
     sec1: '1. Chế độ sử dụng chính trên Xiaomi Redmi Note 5 (theo ui_layout.json của bạn)',
     sec2: '2. Các màn hình chức năng còn lại trong App (24 Cell • Biểu đồ • Cài đặt Read-Only • Kết nối lần đầu)',
+    sec3: '3. Kiểm chứng Responsive trên các kích thước màn hình khác (Compact 320dp • Large 412dp • Tablet 840dp)',
     monitor: 'Giám sát', cells: '24 Cell', chart: 'Biểu đồ', settings: 'Cài đặt', connect: 'Kết nối',
     socRing: 'Dung lượng SOC', powerGauge: 'Công suất & Dòng',
     tempsMos: 'Nhiệt độ & MOSFET', cellBars: 'Điện áp 24 Cell', miniChart: 'Xu hướng Live',
@@ -556,6 +653,7 @@ const I18N = {
   en: {
     sec1: '1. Primary Views on Xiaomi Redmi Note 5 (matched to your ui_layout.json)',
     sec2: '2. Secondary App Tabs & First-Time Passcode Flow',
+    sec3: '3. Responsive Verification Across Screen Sizes (Compact 320dp • Large 412dp • Tablet 840dp)',
     monitor: 'Monitor', cells: '24 Cells', chart: 'Charts', settings: 'Settings', connect: 'Connect',
     socRing: 'SOC Capacity', powerGauge: 'Power & Current',
     tempsMos: 'Temps & MOSFETs', cellBars: '24-Cell Voltages', miniChart: 'Streaming Trend',
@@ -568,7 +666,6 @@ const I18N = {
 
 let state = {
   lang: 'vi',
-  theme: 'oled',
   scenarioIdx: 0,
   hudAltCellsPort: false,
   hudAltCellsLand: false,
@@ -597,11 +694,6 @@ function getData() {
 }
 
 function toggleLang() { state.lang = state.lang === 'vi' ? 'en' : 'vi'; render(); }
-function toggleTheme() {
-  state.theme = state.theme === 'oled' ? 'light' : 'oled';
-  document.body.classList.toggle('theme-light', state.theme === 'light');
-  render();
-}
 function cycleScenario() { state.scenarioIdx = (state.scenarioIdx + 1) % SCENARIOS.length; render(); }
 
 function socRingSvg(soc, totalV, size = 76) {
@@ -609,9 +701,9 @@ function socRingSvg(soc, totalV, size = 76) {
   const c = 2 * Math.PI * r;
   const dash = (soc / 100) * c;
   const stroke = soc <= 20 ? '#ef4444' : soc <= 40 ? '#f59e0b' : '#22d3ee';
-  const muted = state.theme === 'light' ? '#334155' : '#cbd5e1';
+  const muted = '#cbd5e1';
   return `
-    <svg width="${size}" height="${size}" viewBox="0 0 76 76" style="flex-shrink:0;">
+    <svg class="soc-ring-svg" width="${size}" height="${size}" viewBox="0 0 76 76" style="flex-shrink:0;">
       <defs>
         <linearGradient id="socGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="${stroke}"/>
@@ -630,12 +722,11 @@ function socRingSvg(soc, totalV, size = 76) {
 
 function powerArcSvg(currentA, powerW) {
   const ratio = Math.min(1, Math.abs(currentA) / 60);
-  const isLight = state.theme === 'light';
-  const color = currentA > 0.2 ? (isLight ? '#15803d' : '#22c55e') : currentA < -0.2 ? (isLight ? '#b45309' : '#f59e0b') : '#22d3ee';
-  const muted = isLight ? '#334155' : '#cbd5e1';
+  const color = currentA > 0.2 ? '#22c55e' : currentA < -0.2 ? '#f59e0b' : '#22d3ee';
+  const muted = '#cbd5e1';
   const halfC = Math.PI * 34;
   return `
-    <svg width="94" height="54" viewBox="0 0 88 52" style="flex-shrink:0;">
+    <svg class="power-arc-svg" width="94" height="54" viewBox="0 0 88 52" style="flex-shrink:0;">
       <path d="M 10 44 A 34 34 0 0 1 78 44" fill="none" stroke="rgba(148,163,184,0.22)" stroke-width="7" stroke-linecap="round"/>
       <path d="M 10 44 A 34 34 0 0 1 78 44" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
         stroke-dasharray="${(ratio * halfC).toFixed(1)} ${halfC.toFixed(1)}"/>
@@ -650,9 +741,9 @@ function cardSoc(d) {
     <div class="card">
       <div class="card-label"><span class="card-label-left">${SVG.battery}<span>${t('socRing')}</span></span></div>
       <div class="card-row-split">
-        <div style="display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1 1 auto;">
           ${socRingSvg(d.soc, d.totalV, 76)}
-          <div>
+          <div style="min-width:0;">
             <div class="big-val">${d.totalV.toFixed(3)}<span style="font-size:12px;color:var(--app-muted)"> V</span></div>
             <div class="sub-val num">${t('remCap')}: <b>${d.remAh.toFixed(2)}</b> / ${d.nomAh.toFixed(0)} Ah</div>
           </div>
@@ -667,9 +758,8 @@ function cardSoc(d) {
 }
 
 function cardPower(d) {
-  const isLight = state.theme === 'light';
   const modeLabel = d.currentA > 0.2 ? t('charging') : d.currentA < -0.2 ? t('discharging') : t('standby');
-  const col = d.currentA > 0.2 ? (isLight ? '#15803d' : '#22c55e') : d.currentA < -0.2 ? (isLight ? '#b45309' : '#f59e0b') : 'var(--accent)';
+  const col = d.currentA > 0.2 ? '#22c55e' : d.currentA < -0.2 ? '#f59e0b' : 'var(--accent)';
   return `
     <div class="card">
       <div class="card-label"><span class="card-label-left">${SVG.gauge}<span>${t('powerGauge')}</span></span><span class="num" style="color:${col}">${modeLabel}</span></div>
@@ -703,40 +793,46 @@ function cardTempsMos(d) {
 
 function chartSvg(height, metricColor = '#22d3ee', label = 'POWER (W)') {
   const pts = [];
+  let lastY = height / 2;
   for (let i = 0; i < 24; i++) {
     const x = (i / 23) * 280;
     const wave = Math.sin((i + state.tick) * 0.45) * 14 + Math.cos((i + state.tick) * 0.2) * 8;
     const y = height / 2 - wave * (height / 95);
+    lastY = y;
     pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
   }
+  const gradId = `areaG_${height}_${metricColor.replace('#', '')}`;
   return `
     <div class="card-label">
       <span class="card-label-left">${SVG.chart}<span>${t('miniChart')} (${label})</span></span>
       <span class="num" style="font-size:10px;">1m • 5m • 15m</span>
     </div>
-    <svg width="100%" height="${height}" viewBox="0 0 280 ${height}" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="areaG_${height}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${metricColor}" stop-opacity="0.34"/>
-          <stop offset="100%" stop-color="${metricColor}" stop-opacity="0.02"/>
-        </linearGradient>
-      </defs>
-      <line x1="0" y1="${height/2}" x2="280" y2="${height/2}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 4"/>
-      <polygon points="0,${height} ${pts.join(' ')} 280,${height}" fill="url(#areaG_${height})"/>
-      <polyline points="${pts.join(' ')}" fill="none" stroke="${metricColor}" stroke-width="2.2" stroke-linecap="round"/>
-      <circle cx="280" cy="${pts[pts.length-1].split(',')[1]}" r="3.5" fill="${metricColor}"/>
-    </svg>
+    <div class="chart-wrap">
+      <svg width="100%" height="${height}" viewBox="0 0 280 ${height}" preserveAspectRatio="none" style="display:block;">
+        <defs>
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${metricColor}" stop-opacity="0.34"/>
+            <stop offset="100%" stop-color="${metricColor}" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="${height/2}" x2="280" y2="${height/2}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 4"/>
+        <polygon points="0,${height} ${pts.join(' ')} 280,${height}" fill="url(#${gradId})"/>
+        <polyline points="${pts.join(' ')}" fill="none" stroke="${metricColor}" stroke-width="2.2" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+      </svg>
+      <span class="chart-dot" style="top:${((lastY / height) * 100).toFixed(1)}%; background:${metricColor};"></span>
+    </div>
   `;
 }
 
-function cardCells(d, count = 24) {
+function cardCells(d, count = 24, colsOverride = 0) {
+  const gridStyle = colsOverride ? `style="grid-template-columns: repeat(${colsOverride}, 1fr);"` : '';
   return `
     <div class="card">
       <div class="card-label">
         <span class="card-label-left">${SVG.grid}<span>${t('cellBars')}</span></span>
         <span class="num" style="font-size:10px; color:var(--app-text)">Δ ${d.deltaVStr} V</span>
       </div>
-      <div class="cell-grid">
+      <div class="cell-grid" ${gridStyle}>
         ${d.cells.slice(0, count).map((v, i) => {
           const isMax = (i + 1) === d.maxIdx;
           const isMin = (i + 1) === d.minIdx;
@@ -761,7 +857,7 @@ function appHeaderHtml(extraPill = '') {
         <span class="dot-live"></span>
         <span class="bms-name-ellipsis">JK-BD6A24S6PD</span>
       </div>
-      <div style="display:flex; gap:6px; align-items:center;">
+      <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
         ${extraPill}
         <span class="pill-ro">${SVG.lock}<span>Read Only</span></span>
       </div>
@@ -773,6 +869,20 @@ function bottomNavHtml(activeTab) {
   const icons = { monitor: SVG.bolt, cells: SVG.grid, chart: SVG.chart, settings: SVG.lock, connect: SVG.bt };
   return `
     <div class="app-bottom-nav">
+      ${['monitor', 'cells', 'chart', 'settings', 'connect'].map(tab => `
+        <div class="nav-item ${tab === activeTab ? 'active' : ''}">
+          ${icons[tab]}
+          <span>${t(tab)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function navRailHtml(activeTab) {
+  const icons = { monitor: SVG.bolt, cells: SVG.grid, chart: SVG.chart, settings: SVG.lock, connect: SVG.bt };
+  return `
+    <div class="app-nav-rail">
       ${['monitor', 'cells', 'chart', 'settings', 'connect'].map(tab => `
         <div class="nav-item ${tab === activeTab ? 'active' : ''}">
           ${icons[tab]}
@@ -806,8 +916,7 @@ function mapsBlock(pct, isLandscape = false) {
 }
 
 function hud30Html(d, isNarrow = false) {
-  const isLight = state.theme === 'light';
-  const curColor = d.currentA < -0.2 ? (isLight ? '#b45309' : '#f59e0b') : d.currentA > 0.2 ? (isLight ? '#15803d' : '#22c55e') : 'var(--app-text)';
+  const curColor = d.currentA < -0.2 ? '#f59e0b' : d.currentA > 0.2 ? '#22c55e' : 'var(--app-text)';
   const toggleKey = isNarrow ? 'hudAltCellsLand' : 'hudAltCellsPort';
   const showCells = state[toggleKey];
   if (showCells) {
@@ -820,7 +929,7 @@ function hud30Html(d, isNarrow = false) {
             <button class="pill-btn active" onclick="state.${toggleKey}=false; render();">HUD</button>
           </div>
         </div>
-        <div class="cell-grid" style="grid-template-columns: repeat(${isNarrow ? 3 : 6}, 1fr); overflow:auto; flex:1;">
+        <div class="cell-grid" style="grid-template-columns: repeat(${isNarrow ? 3 : 6}, 1fr); overflow:auto; flex:1; align-content:start;">
           ${d.cells.map((v, i) => `
             <div class="cell-item ${v === d.maxV ? 'is-max' : v === d.minV ? 'is-min' : ''}">
               <div class="cell-top"><span class="num">#${i+1}</span></div>
@@ -885,7 +994,6 @@ function render() {
   const sc = SCENARIOS[state.scenarioIdx];
   document.getElementById('btnScenario').innerHTML = `${SVG.bolt}<span>${state.lang === 'vi' ? sc.labelVi : sc.labelEn}</span>`;
   document.getElementById('btnLang').innerHTML = `${SVG.globe}<span>${state.lang === 'vi' ? 'Tiếng Việt' : 'English'}</span>`;
-  document.getElementById('btnTheme').innerHTML = `${state.theme === 'oled' ? SVG.moon : SVG.sun}<span>${state.theme === 'oled' ? 'OLED Dark' : 'Daylight'}</span>`;
 
   // 1. Full Dọc (exact widget order from ui_layout.json: soc_ring -> power_gauge -> temps_mos -> mini_chart -> cell_bars)
   const fullPortrait = frameShell(
@@ -905,19 +1013,19 @@ function render() {
     </div>`
   );
 
-  // 2. Chia 50/50 với Google Maps (mini_chart ẩn theo showIn50: false)
+  // 2. Chia 50/50 với Google Maps (mini_chart ẩn theo showIn50: false, ưu tiên thấy đủ 3 thẻ SOC + Công suất + Nhiệt độ)
   const split50 = frameShell(
     'Chia 50/50 với Google Maps',
     'Maps 50% | App BMS 50% (360×345 dp)',
     360, 700,
     `${mapsBlock(50)}
-     <div class="app-pane" style="height:50%;">
+     <div class="app-pane app-split50" style="height:50%;">
        ${appHeaderHtml()}
        <div class="app-scroll">
          ${cardSoc(d)}
          ${cardPower(d)}
          ${cardTempsMos(d)}
-         ${cardCells(d, 8)}
+         ${cardCells(d, 24)}
        </div>
        ${bottomNavHtml('monitor')}
      </div>`
@@ -934,49 +1042,52 @@ function render() {
      </div>`
   );
 
-  // 4. Ngang Full In-App 50/50 (theo inAppLandscapeRatio: "50/50")
+  // 4. Ngang Full In-App 50/50 + Navigation Rail trái
   const landInApp = frameShell(
-    'Xoay Ngang — In-App 50/50',
-    '700×360 dp • Cột trái tổng quan | Cột phải 24 Cell + Chart',
+    'Xoay Ngang — In-App 50/50 + Nav Rail',
+    '700×360 dp • Rail trái | Tổng quan | 24 Cell + Chart',
     700, 360,
     `<div class="app-pane" style="width:100%; height:100%;">
       ${appHeaderHtml()}
-      <div class="app-scroll">
-        <div class="inapp-2col">
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            ${cardSoc(d)}
-            ${cardPower(d)}
-            ${cardTempsMos(d)}
-          </div>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div class="card">${chartSvg(78)}</div>
-            ${cardCells(d, 24)}
+      <div class="app-body-with-rail">
+        ${navRailHtml('monitor')}
+        <div class="app-scroll">
+          <div class="inapp-2col">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              ${cardSoc(d)}
+              ${cardPower(d)}
+              ${cardTempsMos(d)}
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div class="card">${chartSvg(78)}</div>
+              ${cardCells(d, 24)}
+            </div>
           </div>
         </div>
       </div>
     </div>`
   );
 
-  // 5. Ngang Chia 50/50 với Google Maps
+  // 5. Ngang Chia 50/50 với Google Maps (ưu tiên thấy đủ 3 thẻ SOC + Công suất + Nhiệt độ, cuộn xem 24 cell)
   const landSplit50 = frameShell(
     'Ngang Chia 50/50 với Maps',
     'Maps 50% | App BMS 50% (345×360 dp)',
     700, 360,
     `${mapsBlock(50, true)}
-     <div class="app-pane" style="width:50%; height:100%;">
+     <div class="app-pane app-split50" style="width:50%; height:100%;">
        ${appHeaderHtml()}
        <div class="app-scroll">
          ${cardSoc(d)}
          ${cardPower(d)}
          ${cardTempsMos(d)}
-         ${cardCells(d, 8)}
+         ${cardCells(d, 24)}
        </div>
        ${bottomNavHtml('monitor')}
      </div>`,
     true
   );
 
-  // 6. Ngang Chia 70/30 với Google Maps
+  // 6. Ngang Chia 70/30 với Google Maps (giữ nguyên layout 1 cột gốc)
   const landSplit30 = frameShell(
     'Ngang Chia 70/30 với Maps',
     'Maps 68% | App BMS 32% (220×360 dp)',
@@ -988,7 +1099,7 @@ function render() {
     true
   );
 
-  // 6. Tab Biểu đồ Realtime (Full)
+  // 7. Tab Biểu đồ Realtime (Full)
   const chartTab = frameShell(
     'Tab Biểu đồ Realtime',
     'Canvas mượt • V / A / W / ΔV / °C',
@@ -1012,7 +1123,7 @@ function render() {
     </div>`
   );
 
-  // 7. Tab Cài đặt Read-Only (Frame 0x01 + 0x03)
+  // 8. Tab Cài đặt Read-Only (Frame 0x01 + 0x03)
   const settingsTab = frameShell(
     'Tab Cài đặt (Read-Only) & Info',
     'Đọc từ Frame 0x01 & 0x03 • Không cho sửa',
@@ -1049,7 +1160,7 @@ function render() {
     </div>`
   );
 
-  // 8. Tab Kết nối BLE (Scan 1 lần, Search, Quét QR, Passcode lần đầu)
+  // 9. Tab Kết nối BLE (Scan 1 lần, Search, Quét QR, Passcode lần đầu)
   const connectTab = frameShell(
     'Tab Kết nối (Scan • Search • QR • Passcode)',
     'Mở app tự quét 1 lần • Đang kết nối giữ nguyên • Bấm nút để quét lại',
@@ -1058,12 +1169,12 @@ function render() {
       ${appHeaderHtml()}
       <div class="app-scroll">
         <div class="card" style="display:flex; flex-direction:column; gap:8px;">
-          <div style="display:flex; gap:6px; align-items:center;">
-            <div style="flex:1; display:flex; align-items:center; gap:6px; background:var(--app-card-elevated); border:1px solid var(--app-card-border); border-radius:9px; padding:6px 9px; font-size:11.5px; color:var(--app-muted);">
+          <div class="connect-search-row">
+            <div class="connect-search-box">
               ${SVG.search}<span>Tìm tên hoặc MAC...</span>
             </div>
-            <button class="pill-btn active" style="min-height:34px;" title="Quét lại BLE">${SVG.refresh}<span>Quét</span></button>
-            <button class="pill-btn" style="min-height:34px;" title="Quét QR">${SVG.qr}<span>QR</span></button>
+            <button class="pill-btn active" title="Quét lại BLE">${SVG.refresh}<span>Quét</span></button>
+            <button class="pill-btn" title="Quét QR">${SVG.qr}<span>QR</span></button>
           </div>
           <div style="font-size:10.5px; color:var(--app-muted);">Đã quét xong 1 lượt (tiết kiệm pin). Bấm <b>Quét</b> để tìm lại.</div>
         </div>
@@ -1083,10 +1194,71 @@ function render() {
           </div>
           <div class="sub-val" style="margin-top:0; font-size:10.5px;">Lần đầu kết nối MAC mới sẽ hỏi mật khẩu, các lần sau tự mở khóa.</div>
           <input class="pass-input" type="password" value="1234" readonly style="padding:7px; font-size:14px;" />
-          <button class="btn-app-primary" style="min-height:38px; font-size:12px;">Xác nhận & Xem thông số</button>
+          <button class="btn-app-primary" style="font-size:12px;">Xác nhận & Xem thông số</button>
         </div>
       </div>
       ${bottomNavHtml('connect')}
+    </div>`
+  );
+
+  // 10. Responsive Verification: Compact 320dp, Large 412dp, Tablet 840dp
+  const compact320 = frameShell(
+    'Compact Phone (320dp)',
+    '320×568 dp • 3 cột cell • Safe wrap',
+    320, 568,
+    `<div class="app-pane app-compact" style="height:100%;">
+      ${appHeaderHtml()}
+      <div class="app-scroll">
+        ${cardSoc(d)}
+        ${cardPower(d)}
+        ${cardTempsMos(d)}
+        ${cardCells(d, 24)}
+      </div>
+      ${bottomNavHtml('monitor')}
+    </div>`
+  );
+
+  const large412 = frameShell(
+    'Large Phone (412dp)',
+    '412×760 dp • 2 cột SOC+Power • 4 cột cell',
+    412, 760,
+    `<div class="app-pane app-wide" style="height:100%;">
+      ${appHeaderHtml()}
+      <div class="app-scroll">
+        <div class="wide-2col-top">
+          ${cardSoc(d)}
+          ${cardPower(d)}
+        </div>
+        ${cardTempsMos(d)}
+        <div class="card">${chartSvg(78)}</div>
+        ${cardCells(d, 24)}
+      </div>
+      ${bottomNavHtml('monitor')}
+    </div>`
+  );
+
+  const tablet840 = frameShell(
+    'Tablet / Foldable (840dp)',
+    '840×520 dp • Nav Rail + Bento + 6 cột 24 Cell',
+    840, 520,
+    `<div class="app-pane app-tablet" style="width:100%; height:100%;">
+      ${appHeaderHtml()}
+      <div class="app-body-with-rail">
+        ${navRailHtml('monitor')}
+        <div class="app-scroll">
+          <div class="tablet-bento">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              ${cardSoc(d)}
+              ${cardPower(d)}
+              ${cardTempsMos(d)}
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div class="card">${chartSvg(96)}</div>
+              ${cardCells(d, 24)}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>`
   );
 
@@ -1099,6 +1271,10 @@ function render() {
     <div>
       <div class="section-heading">${t('sec2')}</div>
       <div class="row-section">${chartTab}${settingsTab}${connectTab}</div>
+    </div>
+    <div>
+      <div class="section-heading">${t('sec3')}</div>
+      <div class="row-section">${compact320}${large412}${tablet840}</div>
     </div>
   `;
 }

@@ -19,7 +19,7 @@ While the official JK BMS app packs full configuration and control menus into a 
 
 - **Strict Read-Only Safety:** Protocol encoding (`JkFrameCodec`) restricts outbound traffic to read-only query frames (`0x97` Device Info and `0x96` Cell/Settings Info). It is impossible to accidentally toggle charge/discharge MOSFETs or alter protection thresholds while inspecting live metrics.
 - **Cleaner Visual Hierarchy:** Replaces cluttered raw tables with an OLED-first dashboard featuring a circular SOC gauge, signed current/power arc, `0.001 V` cell delta readout, min/max cell highlights, and automatic `--` masking for disconnected temperature probes (`<= -100°C`).
-- **Adaptive Multi-Window Layout:** Automatically restructures from a full dashboard into compact single-pane and narrow HUD views so essential telemetry remains legible at any window size or orientation.
+- **Adaptive Multi-Window Layout:** Strictly OLED Dark (`#000000`) Compose UI that adapts dynamically across portrait, `50/50` split-screen (fitting SOC, Power, and Temps/MOS together on screen with all 24 cells scrollable below), `70/30` Rider HUD, landscape Navigation Rail, and tablet Bento layouts.
 - **Battery-Conscious BLE Discovery:** Scans in short one-shot bursts rather than polling Bluetooth continuously in the background, paired with name/MAC search and QR lookup, while preserving active connections when switching tabs.
 - **Automatic Protocol & Smart Passcode Flow:** Auto-detects `JK02_32S`, `JK02_24S`, and `JK04` frames (supporting both single- and dual-`0xFFE1` BLE modules), verifies the device passcode once per BMS MAC address, and unlocks automatically on subsequent connections.
 - **Bilingual Support:** Instant switching between English and Vietnamese.
@@ -47,6 +47,7 @@ flowchart LR
 
 | Path | Purpose |
 | :--- | :--- |
+| [`app/`](app) | Android Jetpack Compose app (`minSdk 26`, `targetSdk 35`): `BluetoothGatt` read-only BLE client, `SharedPreferences` MAC passcode store, adaptive multi-window OLED Dark UI, Canvas gauges/charts, and offline 24S Demo mode. |
 | [`bms-core/`](bms-core) | Pure Kotlin/JVM library: read-only frame codec, BLE chunk reassembly, CRC-8 check, `JK02_32S` / `JK02_24S` / `JK04` parsers, MAC passcode policy, and chart ring buffer. |
 | [`bms-cli/`](bms-cli) | Command-line runner to decode and inspect captured hex frames through `:bms-core`. |
 | [`tools/jk_ble_probe.py`](tools/jk_ble_probe.py) | Python `bleak` probe for Windows BLE testing, live telemetry readout, first-time passcode caching, and hex frame capture. |
@@ -69,11 +70,17 @@ Protocol decoding is based on community reverse-engineering documented in [`syss
 
 ## Local Verification (Laptop)
 
-### Run Kotlin Backend Tests & Sample CLI
+### Run Kotlin Backend Tests, Android Unit Tests & Build Debug APK
 
 ```powershell
+# Run core tests and sample CLI
 .\gradlew.bat :bms-core:test :bms-cli:run
+
+# Run all tests and build Android debug APK (requires Android SDK in local.properties or ANDROID_HOME)
+.\gradlew.bat :bms-core:test :app:testDebugUnitTest :app:assembleDebug
 ```
+
+Output APK: `app\build\outputs\apk\debug\app-debug.apk`
 
 ### Live BLE Probe Against Hardware
 

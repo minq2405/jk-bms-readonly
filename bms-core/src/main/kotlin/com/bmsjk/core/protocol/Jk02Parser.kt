@@ -71,12 +71,12 @@ object Jk02Parser {
         // Byte 122+tailOffset is unsigned power in BMS frames; signed V * I preserves charge/discharge sign.
         val signedPowerW = totalVoltageV * currentA
 
-        val temp1C = ByteReader.i16LE(data, 130 + tailOffset) * 0.1f
-        val temp2C = ByteReader.i16LE(data, 132 + tailOffset) * 0.1f
+        val temp1C = sanitizeTemp(ByteReader.i16LE(data, 130 + tailOffset))
+        val temp2C = sanitizeTemp(ByteReader.i16LE(data, 132 + tailOffset))
         val mosfetTempC = if (is32s) {
-            ByteReader.i16LE(data, 112 + tailOffset) * 0.1f
+            sanitizeTemp(ByteReader.i16LE(data, 112 + tailOffset))
         } else {
-            ByteReader.i16LE(data, 134 + tailOffset) * 0.1f
+            sanitizeTemp(ByteReader.i16LE(data, 134 + tailOffset))
         }
 
         val errorsBitmask = if (is32s) {
@@ -103,9 +103,9 @@ object Jk02Parser {
             mosfetTempC = mosfetTempC,
             temp1C = temp1C,
             temp2C = temp2C,
-            temp3C = if (is32s) ByteReader.i16LE(data, 226 + tailOffset) * 0.1f else null,
-            temp4C = if (is32s) ByteReader.i16LE(data, 224 + tailOffset) * 0.1f else null,
-            temp5C = if (is32s) ByteReader.i16LE(data, 222 + tailOffset) * 0.1f else null,
+            temp3C = if (is32s) sanitizeTemp(ByteReader.i16LE(data, 226 + tailOffset)) else null,
+            temp4C = if (is32s) sanitizeTemp(ByteReader.i16LE(data, 224 + tailOffset)) else null,
+            temp5C = if (is32s) sanitizeTemp(ByteReader.i16LE(data, 222 + tailOffset)) else null,
             socPercent = ByteReader.u8(data, 141 + tailOffset),
             sohPercent = ByteReader.u8(data, 158 + tailOffset),
             remainingCapacityAh = ByteReader.u32LE(data, 142 + tailOffset) * 0.001f,
@@ -215,5 +215,14 @@ object Jk02Parser {
             wireResistancesOhm = wireResistances,
             controlFlags = controlFlags
         )
+    }
+
+    /**
+     * Disconnected JK BMS NTC probes report <= -100C (typically -200.0C / 0xF830);
+     * mask out-of-range probes to null so the UI renders "--".
+     */
+    private fun sanitizeTemp(rawDeciC: Int): Float? {
+        val tempC = rawDeciC * 0.1f
+        return if (tempC <= -100f || tempC >= 200f) null else tempC
     }
 }

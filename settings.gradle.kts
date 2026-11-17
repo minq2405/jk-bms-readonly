@@ -18,3 +18,4 @@ rootProject.name = "jk-bms-readonly"
 
 include(":bms-core")
 include(":bms-cli")
+include(":app")
