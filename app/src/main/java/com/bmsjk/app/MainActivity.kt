@@ -83,7 +83,9 @@ class MainActivity : ComponentActivity() {
                     onConnectQrPayload = viewModel::connectByQrOrMacPayload,
                     onDisconnect = viewModel::disconnect,
                     onSubmitPasscode = viewModel::submitPasscode,
-                    onForgetPasscode = viewModel::forgetSavedPasscode
+                    onForgetPasscode = viewModel::forgetSavedPasscode,
+                    onKeepLastValues = viewModel::keepLastTelemetryAndStay,
+                    onDisconnectAndGoToConnect = viewModel::disconnectAndGoToConnect
                 )
             }
         }

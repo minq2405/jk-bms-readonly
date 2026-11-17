@@ -66,8 +66,17 @@ data class UiStrings(
     val notConnectedTitle: String,
     val notConnectedDesc: String,
     val goToConnect: String,
-    val activeAlarms: String
+    val activeAlarms: String,
+    val connectionLostTitle: String,
+    val connectionLostDescPrefix: String,
+    val connectionLostDescSuffix: String,
+    val keepLastValuesBtn: String,
+    val disconnectAndGoConnectBtn: String,
+    val savedOfflineBadge: String,
+    val lostBadge: String
 ) {
+    fun connectionLostDesc(deviceName: String): String =
+        "$connectionLostDescPrefix $deviceName $connectionLostDescSuffix"
     fun cellsTabLabel(cellCount: Int?): String {
         val n = cellCount?.takeIf { it > 0 }?.toString() ?: "N"
         return if (isVi) "$n Cell" else if (n == "1") "1 Cell" else "$n Cells"
@@ -141,7 +150,14 @@ object AppStrings {
         notConnectedTitle = "Chưa kết nối JK BMS",
         notConnectedDesc = "Vào tab Kết nối để quét và kết nối mạch JK BMS của bạn.",
         goToConnect = "Mở Kết nối",
-        activeAlarms = "Cảnh báo BMS"
+        activeAlarms = "Cảnh báo BMS",
+        connectionLostTitle = "Mất kết nối",
+        connectionLostDescPrefix = "Kết nối tới",
+        connectionLostDescSuffix = "đã bị ngắt (có thể do đi quá xa). Giá trị cuối cùng vẫn được giữ lại để xem.",
+        keepLastValuesBtn = "Đóng",
+        disconnectAndGoConnectBtn = "Kết nối lại",
+        savedOfflineBadge = "ĐÃ LƯU",
+        lostBadge = "Mất kết nối"
     )
 
     private val EN = UiStrings(
@@ -205,7 +221,14 @@ object AppStrings {
         notConnectedTitle = "No JK BMS Connected",
         notConnectedDesc = "Open Connect to scan and connect to your JK BMS.",
         goToConnect = "Open Connect",
-        activeAlarms = "BMS Alarms"
+        activeAlarms = "BMS Alarms",
+        connectionLostTitle = "Connection Lost",
+        connectionLostDescPrefix = "Connection to",
+        connectionLostDescSuffix = "was lost (possibly out of range). The last telemetry values are kept for viewing.",
+        keepLastValuesBtn = "Close",
+        disconnectAndGoConnectBtn = "Reconnect",
+        savedOfflineBadge = "SAVED",
+        lostBadge = "Lost"
     )
 
     fun forLang(lang: AppLanguage): UiStrings = if (lang == AppLanguage.VI) VI else EN

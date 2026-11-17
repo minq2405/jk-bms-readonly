@@ -175,13 +175,14 @@ fun ConnectTab(
             )
         }
 
-        // Active / Error connection summary card
+        // Active / Lost / Error connection summary card
         val conn = state.connectionState
         if (conn !is BleConnectionState.Disconnected) {
             val connAddress = when (conn) {
                 is BleConnectionState.Connected -> conn.address
                 is BleConnectionState.Connecting -> conn.address
                 is BleConnectionState.Discovering -> conn.address
+                is BleConnectionState.ConnectionLost -> conn.address
                 is BleConnectionState.Error -> ""
                 BleConnectionState.Disconnected -> ""
             }
@@ -189,15 +190,25 @@ fun ConnectTab(
                 is BleConnectionState.Connected -> conn.name
                 is BleConnectionState.Connecting -> conn.name
                 is BleConnectionState.Discovering -> conn.name
+                is BleConnectionState.ConnectionLost -> "${conn.name} (${conn.reason})"
                 is BleConnectionState.Error -> conn.message
                 BleConnectionState.Disconnected -> ""
             }
             val isError = conn is BleConnectionState.Error
+            val isLost = conn is BleConnectionState.ConnectionLost
 
             OledCard(
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = if (isError) OledTokens.DangerRed else OledTokens.Accent.copy(alpha = 0.55f),
-                containerColor = if (isError) OledTokens.DangerSoft else OledTokens.Card
+                borderColor = when {
+                    isError -> OledTokens.DangerRed
+                    isLost -> OledTokens.DischargeAmber
+                    else -> OledTokens.Accent.copy(alpha = 0.55f)
+                },
+                containerColor = when {
+                    isError -> OledTokens.DangerSoft
+                    isLost -> OledTokens.AmberSoft
+                    else -> OledTokens.Card
+                }
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -232,11 +243,20 @@ fun ConnectTab(
                         StatusPill(
                             text = when {
                                 isError -> strings.errorBadge
+                                isLost -> strings.lostBadge
                                 conn is BleConnectionState.Connected -> strings.connectedBadge
                                 else -> strings.connectingBadge
                             },
-                            textColor = if (isError) OledTokens.DangerRed else OledTokens.Accent,
-                            borderColor = if (isError) OledTokens.DangerRed else OledTokens.Accent
+                            textColor = when {
+                                isError -> OledTokens.DangerRed
+                                isLost -> OledTokens.AmberText
+                                else -> OledTokens.Accent
+                            },
+                            borderColor = when {
+                                isError -> OledTokens.DangerRed
+                                isLost -> OledTokens.DischargeAmber
+                                else -> OledTokens.Accent
+                            }
                         )
                         OutlinedButton(
                             onClick = onDisconnect,

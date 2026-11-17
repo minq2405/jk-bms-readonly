@@ -1,5 +1,6 @@
 package com.bmsjk.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,17 +8,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -36,6 +43,7 @@ import com.bmsjk.app.ble.BleDeviceItem
 import com.bmsjk.app.ui.components.AppIcons
 import com.bmsjk.app.ui.components.LiveDot
 import com.bmsjk.app.ui.components.ReadOnlyPill
+import com.bmsjk.app.ui.components.StatusPill
 import com.bmsjk.app.ui.i18n.AppStrings
 import com.bmsjk.app.ui.i18n.UiStrings
 import com.bmsjk.app.ui.theme.OledTokens
@@ -64,71 +72,106 @@ fun DashboardShell(
     onConnectQrPayload: (String) -> Boolean,
     onDisconnect: () -> Unit,
     onSubmitPasscode: (String) -> Unit,
-    onForgetPasscode: () -> Unit
+    onForgetPasscode: () -> Unit,
+    onKeepLastValues: () -> Unit,
+    onDisconnectAndGoToConnect: () -> Unit
 ) {
     val strings = AppStrings.forLang(state.language)
 
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(OledTokens.Bg)
             .safeDrawingPadding()
     ) {
-        val isHud30 = maxHeight < 270.dp || (maxWidth < 270.dp && maxHeight < 420.dp)
-        val isHudNarrow = maxWidth < 270.dp
-        val isCompactSplit50 = !isHud30 && maxHeight in 270.dp..440.dp && maxWidth < 560.dp
-        val useNavRail = !isHud30 && maxWidth >= 560.dp
-        val landscapeBento = maxWidth >= 560.dp
-        val twoColumnTopCards = !isCompactSplit50 && maxWidth in 405.dp..559.dp
-        val compact320 = maxWidth < 345.dp
-        val cellColumns = when {
-            maxWidth >= 780.dp -> 6
-            compact320 -> 3
-            else -> 4
-        }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isHud30 = maxHeight < 270.dp || (maxWidth < 270.dp && maxHeight < 420.dp)
+            val isHudNarrow = maxWidth < 270.dp
+            val isCompactSplit50 = !isHud30 && maxHeight in 270.dp..440.dp && maxWidth < 560.dp
+            val useNavRail = !isHud30 && maxWidth >= 560.dp
+            val landscapeBento = maxWidth >= 560.dp
+            val twoColumnTopCards = !isCompactSplit50 && maxWidth in 405.dp..559.dp
+            val compact320 = maxWidth < 345.dp
+            val cellColumns = when {
+                maxWidth >= 780.dp -> 6
+                compact320 -> 3
+                else -> 4
+            }
 
-        if (isHud30) {
-            Hud30View(
-                state = state,
-                strings = strings,
-                isNarrow = isHudNarrow,
-                onToggleCells = onToggleHudCells,
-                onGoToConnect = { onSelectTab(AppTab.CONNECT) }
-            )
-            return@BoxWithConstraints
-        }
+            if (isHud30) {
+                Hud30View(
+                    state = state,
+                    strings = strings,
+                    isNarrow = isHudNarrow,
+                    onToggleCells = onToggleHudCells,
+                    onGoToConnect = { onSelectTab(AppTab.CONNECT) }
+                )
+                return@BoxWithConstraints
+            }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            AppHeaderBar(
-                state = state,
-                strings = strings,
-                compact = isCompactSplit50
-            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                AppHeaderBar(
+                    state = state,
+                    strings = strings,
+                    compact = isCompactSplit50
+                )
 
-            if (useNavRail) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    AppNavigationRail(
-                        selectedTab = state.selectedTab,
-                        activeCellCount = state.activeCellCount,
-                        strings = strings,
-                        onSelectTab = onSelectTab
-                    )
+                if (useNavRail) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        AppNavigationRail(
+                            selectedTab = state.selectedTab,
+                            activeCellCount = state.activeCellCount,
+                            strings = strings,
+                            onSelectTab = onSelectTab
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        ) {
+                            ActiveTabContent(
+                                state = state,
+                                strings = strings,
+                                cellColumns = cellColumns,
+                                compactSplit50 = false,
+                                twoColumnTopCards = false,
+                                landscapeBento = landscapeBento,
+                                hasBlePermissions = hasBlePermissions,
+                                onRequestBlePermissions = onRequestBlePermissions,
+                                onSelectTab = onSelectTab,
+                                onToggleLanguage = onToggleLanguage,
+                                onSelectProtocolMode = onSelectProtocolMode,
+                                onSelectChartMetric = onSelectChartMetric,
+                                onSelectChartWindow = onSelectChartWindow,
+                                onToggleChartPaused = onToggleChartPaused,
+                                onClearChartHistory = onClearChartHistory,
+                                onSearchQueryChange = onSearchQueryChange,
+                                onScanClick = onScanClick,
+                                onConnectDevice = onConnectDevice,
+                                onConnectQrPayload = onConnectQrPayload,
+                                onDisconnect = onDisconnect,
+                                onSubmitPasscode = onSubmitPasscode,
+                                onForgetPasscode = onForgetPasscode
+                            )
+                        }
+                    }
+                } else {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
                     ) {
                         ActiveTabContent(
                             state = state,
                             strings = strings,
                             cellColumns = cellColumns,
-                            compactSplit50 = false,
-                            twoColumnTopCards = false,
-                            landscapeBento = landscapeBento,
+                            compactSplit50 = isCompactSplit50,
+                            twoColumnTopCards = twoColumnTopCards,
+                            landscapeBento = false,
                             hasBlePermissions = hasBlePermissions,
                             onRequestBlePermissions = onRequestBlePermissions,
                             onSelectTab = onSelectTab,
@@ -147,50 +190,104 @@ fun DashboardShell(
                             onForgetPasscode = onForgetPasscode
                         )
                     }
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    ActiveTabContent(
-                        state = state,
+
+                    AppBottomNavBar(
+                        selectedTab = state.selectedTab,
+                        activeCellCount = state.activeCellCount,
                         strings = strings,
-                        cellColumns = cellColumns,
                         compactSplit50 = isCompactSplit50,
-                        twoColumnTopCards = twoColumnTopCards,
-                        landscapeBento = false,
-                        hasBlePermissions = hasBlePermissions,
-                        onRequestBlePermissions = onRequestBlePermissions,
-                        onSelectTab = onSelectTab,
-                        onToggleLanguage = onToggleLanguage,
-                        onSelectProtocolMode = onSelectProtocolMode,
-                        onSelectChartMetric = onSelectChartMetric,
-                        onSelectChartWindow = onSelectChartWindow,
-                        onToggleChartPaused = onToggleChartPaused,
-                        onClearChartHistory = onClearChartHistory,
-                        onSearchQueryChange = onSearchQueryChange,
-                        onScanClick = onScanClick,
-                        onConnectDevice = onConnectDevice,
-                        onConnectQrPayload = onConnectQrPayload,
-                        onDisconnect = onDisconnect,
-                        onSubmitPasscode = onSubmitPasscode,
-                        onForgetPasscode = onForgetPasscode
+                        compact320 = compact320,
+                        onSelectTab = onSelectTab
                     )
                 }
+            }
+        }
 
-                AppBottomNavBar(
-                    selectedTab = state.selectedTab,
-                    activeCellCount = state.activeCellCount,
-                    strings = strings,
-                    compactSplit50 = isCompactSplit50,
-                    compact320 = compact320,
-                    onSelectTab = onSelectTab
+        if (state.showDisconnectPrompt) {
+            val lostName = when (val c = state.connectionState) {
+                is BleConnectionState.ConnectionLost -> c.name
+                else -> state.session.deviceInfo?.deviceName ?: "JK BMS"
+            }
+            ConnectionLostDialog(
+                deviceName = lostName,
+                strings = strings,
+                onKeepLastValues = onKeepLastValues,
+                onDisconnectAndGoToConnect = onDisconnectAndGoToConnect
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConnectionLostDialog(
+    deviceName: String,
+    strings: UiStrings,
+    onKeepLastValues: () -> Unit,
+    onDisconnectAndGoToConnect: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onKeepLastValues,
+        containerColor = OledTokens.Card,
+        titleContentColor = OledTokens.Text,
+        textContentColor = OledTokens.Muted,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = AppIcons.Warning,
+                    contentDescription = null,
+                    tint = OledTokens.DischargeAmber,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = strings.connectionLostTitle,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Text(
+                text = strings.connectionLostDesc(deviceName),
+                fontSize = 12.5.sp,
+                color = OledTokens.Muted
+            )
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onKeepLastValues,
+                border = BorderStroke(1.dp, OledTokens.CardBorder),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(42.dp)
+            ) {
+                Text(
+                    text = strings.keepLastValuesBtn,
+                    color = OledTokens.Text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.5.sp
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDisconnectAndGoToConnect,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OledTokens.Accent,
+                    contentColor = Color.Black
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(42.dp)
+            ) {
+                Text(
+                    text = strings.disconnectAndGoConnectBtn,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.5.sp
                 )
             }
         }
-    }
+    )
 }
 
 @Composable
@@ -277,9 +374,10 @@ private fun AppHeaderBar(
             is BleConnectionState.Connected -> conn.name
             is BleConnectionState.Connecting -> conn.name
             is BleConnectionState.Discovering -> conn.name
+            is BleConnectionState.ConnectionLost -> conn.name
             else -> "JK BMS Monitor"
         }
-    val isLive = state.session.isUnlocked && state.session.telemetry != null
+    val isLive = state.session.isUnlocked && state.session.telemetry != null && !state.isViewingSavedSnapshot
 
     Surface(color = OledTokens.Card) {
         Column {
@@ -306,7 +404,23 @@ private fun AppHeaderBar(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                ReadOnlyPill(label = strings.readOnly)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (state.isViewingSavedSnapshot) {
+                        StatusPill(
+                            text = strings.savedOfflineBadge,
+                            textColor = OledTokens.AmberText,
+                            containerColor = OledTokens.AmberSoft,
+                            borderColor = OledTokens.AmberBorder,
+                            fontSize = 9.5.sp,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
+                    ReadOnlyPill(label = strings.readOnly)
+                }
             }
             HorizontalDivider(color = OledTokens.CardBorder, thickness = 1.dp)
         }

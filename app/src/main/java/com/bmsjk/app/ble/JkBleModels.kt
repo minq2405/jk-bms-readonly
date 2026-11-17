@@ -15,6 +15,7 @@ sealed interface BleConnectionState {
     data class Connecting(val address: String, val name: String) : BleConnectionState
     data class Discovering(val address: String, val name: String) : BleConnectionState
     data class Connected(val address: String, val name: String) : BleConnectionState
+    data class ConnectionLost(val address: String, val name: String, val reason: String) : BleConnectionState
     data class Error(val message: String) : BleConnectionState
 }
 

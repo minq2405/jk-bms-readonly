@@ -683,7 +683,7 @@ fun Hud30View(
     val activeName = state.session.deviceInfo?.deviceName?.takeIf { it.isNotBlank() }
         ?: state.session.deviceAddress?.takeIf { it.isNotBlank() }
         ?: "JK BMS"
-    val isLive = state.session.isUnlocked && telemetry != null
+    val isLive = state.session.isUnlocked && telemetry != null && !state.isViewingSavedSnapshot
 
     Column(
         modifier = Modifier

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 enum class AppTab {
     MONITOR,
@@ -45,7 +46,9 @@ data class BmsUiState(
     val chartWindow: ChartWindow = ChartWindow.FIVE_MINUTES,
     val chartSamples: List<TrendSample> = emptyList(),
     val chartStats: MetricStats = MetricStats(null, null, null, null),
-    val bannerMessage: String? = null
+    val bannerMessage: String? = null,
+    val showDisconnectPrompt: Boolean = false,
+    val isViewingSavedSnapshot: Boolean = false
 ) {
     /**
      * Dynamic cell count detected from live telemetry or BMS settings (null when unknown).
@@ -68,6 +71,28 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
     private val chartMetric = MutableStateFlow(ChartMetric.PACK_VOLTAGE)
     private val chartWindow = MutableStateFlow(ChartWindow.FIVE_MINUTES)
     private val bannerMessage = MutableStateFlow<String?>(null)
+    private val showDisconnectPrompt = MutableStateFlow(false)
+    private val isViewingSavedSnapshot = MutableStateFlow(false)
+
+    init {
+        viewModelScope.launch {
+            bleManager.connectionState.collect { conn ->
+                when (conn) {
+                    is BleConnectionState.ConnectionLost -> {
+                        showDisconnectPrompt.value = true
+                    }
+                    is BleConnectionState.Connected,
+                    is BleConnectionState.Connecting,
+                    is BleConnectionState.Discovering -> {
+                        showDisconnectPrompt.value = false
+                        isViewingSavedSnapshot.value = false
+                    }
+                    BleConnectionState.Disconnected,
+                    is BleConnectionState.Error -> Unit
+                }
+            }
+        }
+    }
 
     private data class NavPrefs(
         val tab: AppTab,
@@ -76,7 +101,9 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         val hudCells: Boolean,
         val metric: ChartMetric,
         val window: ChartWindow,
-        val banner: String?
+        val banner: String?,
+        val disconnectPrompt: Boolean,
+        val viewingSaved: Boolean
     )
 
     private val navPrefsFlow = combine(
@@ -85,8 +112,11 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         },
         combine(chartMetric, chartWindow, bannerMessage) { metric, window, banner ->
             Triple(metric, window, banner)
+        },
+        combine(showDisconnectPrompt, isViewingSavedSnapshot) { prompt, saved ->
+            Pair(prompt, saved)
         }
-    ) { a, b ->
+    ) { a, b, c ->
         NavPrefs(
             tab = a.first,
             query = a.second,
@@ -94,7 +124,9 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
             hudCells = a.fourth,
             metric = b.first,
             window = b.second,
-            banner = b.third
+            banner = b.third,
+            disconnectPrompt = c.first,
+            viewingSaved = c.second
         )
     }
 
@@ -131,7 +163,9 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
             chartWindow = prefs.window,
             chartSamples = samples,
             chartStats = stats,
-            bannerMessage = prefs.banner
+            bannerMessage = prefs.banner,
+            showDisconnectPrompt = prefs.disconnectPrompt,
+            isViewingSavedSnapshot = prefs.viewingSaved
         )
     }.stateIn(
         scope = viewModelScope,
@@ -180,6 +214,8 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
 
     fun connectToDevice(device: BleDeviceItem) {
         bannerMessage.value = null
+        isViewingSavedSnapshot.value = false
+        showDisconnectPrompt.value = false
         bleManager.connect(device.address, device.name)
     }
 
@@ -194,14 +230,37 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
             return false
         }
         bannerMessage.value = null
+        isViewingSavedSnapshot.value = false
+        showDisconnectPrompt.value = false
         bleManager.connect(mac, mac)
         return true
     }
 
     fun disconnect() {
+        showDisconnectPrompt.value = false
+        isViewingSavedSnapshot.value = false
         bleManager.disconnect()
         engine.startSession("")
+        engine.clearChartHistory()
         bannerMessage.value = null
+    }
+
+    /**
+     * Choice 1 when BMS goes out of range: keep the last received telemetry, settings,
+     * and chart samples in memory so the user can inspect them offline.
+     */
+    fun keepLastTelemetryAndStay() {
+        showDisconnectPrompt.value = false
+        isViewingSavedSnapshot.value = true
+    }
+
+    /**
+     * Choice 2 when BMS goes out of range: clear current connection session and return
+     * to the Connect tab to scan or reconnect.
+     */
+    fun disconnectAndGoToConnect() {
+        disconnect()
+        selectedTab.value = AppTab.CONNECT
     }
 
     fun submitPasscode(code: String) {

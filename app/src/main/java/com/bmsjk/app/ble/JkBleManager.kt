@@ -72,6 +72,12 @@ class JkBleManager(
     @Volatile
     private var receivedValidBmsFrame: Boolean = false
 
+    @Volatile
+    private var wasConnectedOnce: Boolean = false
+
+    @Volatile
+    private var userInitiatedDisconnect: Boolean = false
+
     fun isBluetoothEnabled(): Boolean =
         runCatching { bluetoothAdapter?.isEnabled == true }.getOrDefault(false)
 
@@ -141,6 +147,7 @@ class JkBleManager(
         }
 
         stopScanInternal()
+        userInitiatedDisconnect = true
         closeGattInternal()
 
         val label = displayName?.takeIf { it.isNotBlank() }
@@ -150,6 +157,8 @@ class JkBleManager(
         engine.startSession(normalized)
         lastCellRxMs = 0L
         receivedValidBmsFrame = false
+        wasConnectedOnce = false
+        userInitiatedDisconnect = false
         _connectionState.value = BleConnectionState.Connecting(normalized, label)
 
         try {
@@ -178,6 +187,8 @@ class JkBleManager(
     }
 
     fun disconnect() {
+        userInitiatedDisconnect = true
+        wasConnectedOnce = false
         closeGattInternal()
         _connectionState.value = BleConnectionState.Disconnected
     }
@@ -254,7 +265,12 @@ class JkBleManager(
                 val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
 
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    failConnection("BLE GATT error (status=$status) on $name")
+                    if (wasConnectedOnce && !userInitiatedDisconnect) {
+                        closeGattInternal()
+                        _connectionState.value = BleConnectionState.ConnectionLost(addr, name, "GATT status=$status")
+                    } else {
+                        failConnection("BLE GATT error (status=$status) on $name")
+                    }
                     return
                 }
 
@@ -267,8 +283,13 @@ class JkBleManager(
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
+                        val lostUnexpectedly = wasConnectedOnce && !userInitiatedDisconnect
                         closeGattInternal()
-                        _connectionState.value = BleConnectionState.Disconnected
+                        _connectionState.value = if (lostUnexpectedly) {
+                            BleConnectionState.ConnectionLost(addr, name, "Disconnected")
+                        } else {
+                            BleConnectionState.Disconnected
+                        }
                     }
                 }
             } catch (t: Throwable) {
@@ -387,6 +408,7 @@ class JkBleManager(
         try {
             val decoded = engine.onNotificationChunk(chunk) ?: return
             receivedValidBmsFrame = true
+            wasConnectedOnce = true
             handshakeTimeoutJob?.cancel()
             when (decoded) {
                 is DecodedFrame.DeviceInfoFrame -> {
@@ -434,10 +456,18 @@ class JkBleManager(
                 delay(1_000L)
                 val snap = engine.snapshot.value
                 if (!snap.isUnlocked) continue
+                val now = System.currentTimeMillis()
+                if (wasConnectedOnce && !userInitiatedDisconnect && lastCellRxMs > 0L && now - lastCellRxMs > 10_000L) {
+                    val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
+                    val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
+                    closeGattInternal()
+                    _connectionState.value = BleConnectionState.ConnectionLost(addr, name, "Signal timeout")
+                    break
+                }
                 if (!requestedInitialCells) {
                     requestedInitialCells = true
                     writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
-                } else if (System.currentTimeMillis() - lastCellRxMs > 1_500L) {
+                } else if (now - lastCellRxMs > 1_500L) {
                     writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
                 }
             }
