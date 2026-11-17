@@ -59,6 +59,7 @@ class JkBleManager(
     val scanCompletedOnce: StateFlow<Boolean> = _scanCompletedOnce.asStateFlow()
 
     private val discoveredMap = LinkedHashMap<String, BleDeviceItem>()
+    private val connectionLock = Any()
     private var scanStopJob: Job? = null
     private var pollJob: Job? = null
     private var handshakeTimeoutJob: Job? = null
@@ -201,8 +202,20 @@ class JkBleManager(
     }
 
     private fun failConnection(reason: String) {
+        synchronized(connectionLock) {
+            wasConnectedOnce = false
+        }
         closeGattInternal()
         _connectionState.value = BleConnectionState.Error(reason)
+    }
+
+    private fun emitConnectionLostOnce(addr: String, name: String, reason: String) {
+        synchronized(connectionLock) {
+            if (!wasConnectedOnce || userInitiatedDisconnect) return
+            wasConnectedOnce = false
+        }
+        closeGattInternal()
+        _connectionState.value = BleConnectionState.ConnectionLost(addr, name, reason)
     }
 
     private fun closeGattInternal() {
@@ -266,8 +279,7 @@ class JkBleManager(
 
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     if (wasConnectedOnce && !userInitiatedDisconnect) {
-                        closeGattInternal()
-                        _connectionState.value = BleConnectionState.ConnectionLost(addr, name, "GATT status=$status")
+                        emitConnectionLostOnce(addr, name, "GATT status=$status")
                     } else {
                         failConnection("BLE GATT error (status=$status) on $name")
                     }
@@ -283,12 +295,11 @@ class JkBleManager(
                         }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
-                        val lostUnexpectedly = wasConnectedOnce && !userInitiatedDisconnect
-                        closeGattInternal()
-                        _connectionState.value = if (lostUnexpectedly) {
-                            BleConnectionState.ConnectionLost(addr, name, "Disconnected")
+                        if (wasConnectedOnce && !userInitiatedDisconnect) {
+                            emitConnectionLostOnce(addr, name, "Disconnected")
                         } else {
-                            BleConnectionState.Disconnected
+                            closeGattInternal()
+                            _connectionState.value = BleConnectionState.Disconnected
                         }
                     }
                 }
@@ -460,8 +471,7 @@ class JkBleManager(
                 if (wasConnectedOnce && !userInitiatedDisconnect && lastCellRxMs > 0L && now - lastCellRxMs > 10_000L) {
                     val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
                     val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
-                    closeGattInternal()
-                    _connectionState.value = BleConnectionState.ConnectionLost(addr, name, "Signal timeout")
+                    emitConnectionLostOnce(addr, name, "Signal timeout")
                     break
                 }
                 if (!requestedInitialCells) {

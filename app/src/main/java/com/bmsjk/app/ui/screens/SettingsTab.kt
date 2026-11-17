@@ -48,6 +48,7 @@ fun SettingsTab(
     val scroll = rememberScrollState()
     val info = state.session.deviceInfo
     val settings = state.session.settings
+    val telemetry = state.session.telemetry
 
     Column(
         modifier = Modifier
@@ -123,11 +124,28 @@ fun SettingsTab(
                 RoRow("Model / HW / SW", "${info.vendorModel} • ${info.hardwareVersion} • ${info.softwareVersion}")
                 RoRow("Device Name", info.deviceName)
                 RoRow("Serial / Mfg", "${info.serialNumber} • ${info.manufacturingDate}")
-                RoRow("Uptime / Power-ons", "${info.uptimeSeconds}s • ${info.powerOnCount}x")
+                RoRow("Uptime / Power-ons", "${formatDuration(info.uptimeSeconds)} • ${info.powerOnCount}x")
                 RoRow(
                     "Protocol",
                     state.session.detectedVariant?.name ?: state.session.protocolMode.name
                 )
+            }
+        }
+
+        // Frame 0x02 Battery Lifecycle & Runtime Stats (Read-Only)
+        OledCard(modifier = Modifier.fillMaxWidth()) {
+            RoGroupHeader(title = strings.batteryStatsGroup, badge = "READ-ONLY")
+            if (telemetry == null) {
+                Text(text = "--", color = OledTokens.Muted, fontSize = 11.sp)
+            } else {
+                val cyclesStr = telemetry.cycleCount?.toString() ?: "--"
+                val sohStr = telemetry.sohPercent?.let { "$it%" } ?: "--"
+                val totalAhStr = telemetry.totalCycleCapacityAh?.let {
+                    String.format(Locale.US, "%.2f Ah", it)
+                } ?: "--"
+                RoRow(strings.cycleCountSohLabel, "$cyclesStr • $sohStr")
+                RoRow(strings.totalCycleAhLabel, totalAhStr)
+                RoRow(strings.totalRunTimeLabel, formatDuration(telemetry.totalRuntimeSeconds))
             }
         }
 
@@ -252,3 +270,17 @@ private fun boolOnOff(v: Boolean?): String = when (v) {
 private fun fmtV(v: Float?): String = v?.let { String.format(Locale.US, "%.3f V", it) } ?: "--"
 private fun fmtA(v: Float?): String = v?.let { String.format(Locale.US, "%.1f A", it) } ?: "--"
 private fun fmtC(v: Float?): String = v?.let { String.format(Locale.US, "%.1f °C", it) } ?: "--"
+
+internal fun formatDuration(totalSeconds: Long): String {
+    if (totalSeconds < 0L) return "--"
+    val days = totalSeconds / 86_400L
+    val hours = (totalSeconds % 86_400L) / 3_600L
+    val mins = (totalSeconds % 3_600L) / 60L
+    val secs = totalSeconds % 60L
+    return when {
+        days > 0L -> "${days}d ${hours}h ${mins}m"
+        hours > 0L -> "${hours}h ${mins}m ${secs}s"
+        mins > 0L -> "${mins}m ${secs}s"
+        else -> "${secs}s"
+    }
+}

@@ -5,6 +5,7 @@ import com.bmsjk.app.ble.MacPayloadParser
 import com.bmsjk.app.data.AppLanguage
 import com.bmsjk.app.ui.components.ChartAxisScaler
 import com.bmsjk.app.ui.i18n.AppStrings
+import com.bmsjk.app.ui.screens.formatDuration
 import com.bmsjk.core.protocol.JkFrameCodec
 import com.bmsjk.core.session.BmsSessionEngine
 import com.bmsjk.core.session.ChartMetric
@@ -95,5 +96,13 @@ class AppLogicTest {
         val downsampled = ChartAxisScaler.downsample(dense, maxPoints = 96)
         assertEquals(96, downsampled.size)
         assertEquals(34.5f, downsampled.last(), 0.001f)
+    }
+
+    @Test
+    fun formatDurationFormatsSecondsMinutesHoursAndDaysCleanly() {
+        assertEquals("45s", formatDuration(45L))
+        assertEquals("5m 12s", formatDuration(312L))
+        assertEquals("2h 1m 5s", formatDuration(7265L))
+        assertEquals("3d 4h 10m", formatDuration(3 * 86_400L + 4 * 3_600L + 10 * 60L + 9L))
     }
 }

@@ -73,7 +73,11 @@ data class UiStrings(
     val keepLastValuesBtn: String,
     val disconnectAndGoConnectBtn: String,
     val savedOfflineBadge: String,
-    val lostBadge: String
+    val lostBadge: String,
+    val batteryStatsGroup: String,
+    val cycleCountSohLabel: String,
+    val totalCycleAhLabel: String,
+    val totalRunTimeLabel: String
 ) {
     fun connectionLostDesc(deviceName: String): String =
         "$connectionLostDescPrefix $deviceName $connectionLostDescSuffix"
@@ -157,7 +161,11 @@ object AppStrings {
         keepLastValuesBtn = "Đóng",
         disconnectAndGoConnectBtn = "Kết nối lại",
         savedOfflineBadge = "ĐÃ LƯU",
-        lostBadge = "Mất kết nối"
+        lostBadge = "Mất kết nối",
+        batteryStatsGroup = "Thống kê & Sức khỏe pin",
+        cycleCountSohLabel = "Chu kỳ sạc/xả • SOH",
+        totalCycleAhLabel = "Tổng Ah tích lũy",
+        totalRunTimeLabel = "Tổng thời gian chạy"
     )
 
     private val EN = UiStrings(
@@ -228,7 +236,11 @@ object AppStrings {
         keepLastValuesBtn = "Close",
         disconnectAndGoConnectBtn = "Reconnect",
         savedOfflineBadge = "SAVED",
-        lostBadge = "Lost"
+        lostBadge = "Lost",
+        batteryStatsGroup = "Battery Lifecycle & Stats",
+        cycleCountSohLabel = "Cycle Count • SOH",
+        totalCycleAhLabel = "Total Cycle Ah",
+        totalRunTimeLabel = "Total Run Time"
     )
 
     fun forLang(lang: AppLanguage): UiStrings = if (lang == AppLanguage.VI) VI else EN
