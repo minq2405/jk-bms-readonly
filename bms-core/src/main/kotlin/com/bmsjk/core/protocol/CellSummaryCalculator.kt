@@ -24,7 +24,7 @@ internal object CellSummaryCalculator {
         var maxIdx = 0
 
         for (cell in cells) {
-            if (cell.enabled && cell.voltageV > 0f) {
+            if (cell.enabled) {
                 enabledCount++
                 sumV += cell.voltageV
                 if (cell.voltageV < minV) {

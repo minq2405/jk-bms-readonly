@@ -76,9 +76,9 @@ object Jk04Parser {
             frameCounter = ByteReader.u8(data, 5),
             cellCount = ByteReader.u8(data, 34),
             nominalCapacityAh = null,
-            startBalanceVoltageV = ByteReader.f32LE(data, 98),
-            balanceTriggerVoltageV = ByteReader.f32LE(data, 106),
-            maxBalanceCurrentA = ByteReader.f32LE(data, 110),
+            startBalanceVoltageV = finiteOrZero(ByteReader.f32LE(data, 98)),
+            balanceTriggerVoltageV = finiteOrZero(ByteReader.f32LE(data, 106)),
+            maxBalanceCurrentA = finiteOrZero(ByteReader.f32LE(data, 110)),
             chargeSwitchOn = null,
             dischargeSwitchOn = null,
             balancerSwitchOn = ByteReader.u8(data, 114) != 0,
@@ -86,7 +86,7 @@ object Jk04Parser {
             cellUvprV = null,
             cellOvpV = null,
             cellOvprV = null,
-            powerOffVoltageV = ByteReader.f32LE(data, 38),
+            powerOffVoltageV = finiteOrZero(ByteReader.f32LE(data, 38)),
             smartSleepVoltageV = null,
             soc100VoltageV = null,
             soc0VoltageV = null,
@@ -117,6 +117,10 @@ object Jk04Parser {
             smartSleepDelayH = null,
             wireResistancesOhm = emptyList(),
             controlFlags = null,
-            jk04VoltageCalibration = ByteReader.f32LE(data, 74)
+            jk04VoltageCalibration = finiteOrNull(ByteReader.f32LE(data, 74))
         )
+
+    private fun finiteOrZero(v: Float): Float = if (v.isFinite()) v else 0f
+
+    private fun finiteOrNull(v: Float): Float? = if (v.isFinite()) v else null
 }

@@ -53,6 +53,7 @@ import com.bmsjk.app.viewmodel.BmsUiState
 import com.bmsjk.core.protocol.BalancingAction
 import com.bmsjk.core.protocol.BmsTelemetry
 import com.bmsjk.core.protocol.CellReading
+import com.bmsjk.core.protocol.ProtocolVariant
 import com.bmsjk.core.session.ChartMetric
 import java.util.Locale
 
@@ -425,8 +426,8 @@ fun TempsMosCard(
     val hPad = if (compact) 6.dp else 8.dp
     val vPad = if (compact) 2.dp else 4.dp
 
-    val chgOn = telemetry.chargingMosEnabled == true
-    val dsgOn = telemetry.dischargingMosEnabled == true
+    val chgState = telemetry.chargingMosEnabled
+    val dsgState = telemetry.dischargingMosEnabled
     val balActive = telemetry.balancingAction != BalancingAction.OFF
 
     OledCard(modifier = Modifier.fillMaxWidth(), contentPadding = padding) {
@@ -438,19 +439,19 @@ fun TempsMosCard(
             verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)
         ) {
             StatusPill(
-                text = "${strings.chgMos}: ${if (chgOn) "ON" else "OFF"}",
-                textColor = if (chgOn) OledTokens.ChargeGreenText else OledTokens.Text,
-                containerColor = if (chgOn) OledTokens.ChargeGreenSoft else OledTokens.CardElevated,
-                borderColor = if (chgOn) OledTokens.ChargeGreenBorder else OledTokens.CardBorder,
+                text = "${strings.chgMos}: ${when (chgState) { true -> "ON"; false -> "OFF"; null -> "--" }}",
+                textColor = if (chgState == true) OledTokens.ChargeGreenText else if (chgState == null) OledTokens.Muted else OledTokens.Text,
+                containerColor = if (chgState == true) OledTokens.ChargeGreenSoft else OledTokens.CardElevated,
+                borderColor = if (chgState == true) OledTokens.ChargeGreenBorder else OledTokens.CardBorder,
                 fontSize = pillFont,
                 horizontalPadding = hPad,
                 verticalPadding = vPad
             )
             StatusPill(
-                text = "${strings.dsgMos}: ${if (dsgOn) "ON" else "OFF"}",
-                textColor = if (dsgOn) OledTokens.ChargeGreenText else OledTokens.Text,
-                containerColor = if (dsgOn) OledTokens.ChargeGreenSoft else OledTokens.CardElevated,
-                borderColor = if (dsgOn) OledTokens.ChargeGreenBorder else OledTokens.CardBorder,
+                text = "${strings.dsgMos}: ${when (dsgState) { true -> "ON"; false -> "OFF"; null -> "--" }}",
+                textColor = if (dsgState == true) OledTokens.ChargeGreenText else if (dsgState == null) OledTokens.Muted else OledTokens.Text,
+                containerColor = if (dsgState == true) OledTokens.ChargeGreenSoft else OledTokens.CardElevated,
+                borderColor = if (dsgState == true) OledTokens.ChargeGreenBorder else OledTokens.CardBorder,
                 fontSize = pillFont,
                 horizontalPadding = hPad,
                 verticalPadding = vPad
@@ -466,19 +467,27 @@ fun TempsMosCard(
             )
             StatusPill(
                 text = "MOS ${formatTempOrDash(telemetry.mosfetTempC)}",
+                textColor = if (telemetry.mosfetTempC == null) OledTokens.Muted else OledTokens.Text,
                 fontSize = pillFont,
                 horizontalPadding = hPad,
                 verticalPadding = vPad
             )
 
-            // Mask disconnected probes (null / <= -100C) cleanly as "--"
-            val probes = listOf(
-                "T1" to telemetry.temp1C,
-                "T2" to telemetry.temp2C,
-                "T3" to telemetry.temp3C,
-                "T4" to telemetry.temp4C,
-                "T5" to telemetry.temp5C
-            )
+            // Only show temperature probes supported by the active protocol variant.
+            val probes = when (telemetry.protocol) {
+                ProtocolVariant.JK02_32S -> listOf(
+                    "T1" to telemetry.temp1C,
+                    "T2" to telemetry.temp2C,
+                    "T3" to telemetry.temp3C,
+                    "T4" to telemetry.temp4C,
+                    "T5" to telemetry.temp5C
+                )
+                ProtocolVariant.JK02_24S -> listOf(
+                    "T1" to telemetry.temp1C,
+                    "T2" to telemetry.temp2C
+                )
+                ProtocolVariant.JK04 -> emptyList()
+            }
             val connectedProbes = probes.filter { it.second != null }
             val disconnectedCount = probes.size - connectedProbes.size
             for ((label, temp) in connectedProbes) {
@@ -546,7 +555,7 @@ fun CellsGridCard(
     strings: UiStrings,
     columns: Int
 ) {
-    val activeCells = telemetry.cells.filter { it.enabled && it.voltageV > 0f }
+    val activeCells = telemetry.cells.filter { it.enabled }
         .ifEmpty { telemetry.cells }
     val rows = activeCells.chunked(columns.coerceAtLeast(1))
 
@@ -773,7 +782,7 @@ fun Hud30View(
 
         if (state.hudShowCells) {
             val cols = if (isNarrow) 3 else 6
-            val activeCells = telemetry.cells.filter { it.enabled && it.voltageV > 0f }
+            val activeCells = telemetry.cells.filter { it.enabled }
                 .ifEmpty { telemetry.cells }
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (rowCells in activeCells.chunked(cols)) {
@@ -848,7 +857,7 @@ fun Hud30View(
             HudMiniBox(AppIcons.Bolt, strings.current, curText, curColor)
             HudMiniBox(AppIcons.Gauge, strings.power, pwrText, OledTokens.Text)
             HudMiniBox(AppIcons.Delta, strings.delta, deltaText, OledTokens.Accent)
-            HudMiniBox(AppIcons.Thermometer, "MOS / T5", maxTempText, OledTokens.Text)
+            HudMiniBox(AppIcons.Thermometer, "MAX °C", maxTempText, OledTokens.Text)
         } else {
             // Portrait 70/30 HUD: SOC card left (108dp) + 2x2 KPIs right
             Row(
@@ -893,7 +902,7 @@ fun Hud30View(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         HudMiniBox(AppIcons.Delta, strings.delta, deltaText, OledTokens.Accent, Modifier.weight(1f))
-                        HudMiniBox(AppIcons.Thermometer, "MOS / T5", maxTempText, OledTokens.Text, Modifier.weight(1f))
+                        HudMiniBox(AppIcons.Thermometer, "MAX °C", maxTempText, OledTokens.Text, Modifier.weight(1f))
                     }
                 }
             }

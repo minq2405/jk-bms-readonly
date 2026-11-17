@@ -54,6 +54,8 @@ internal object ByteReader {
             if (b == 0) break
             if (b in 0x20..0x7E) {
                 sb.append(b.toChar())
+            } else {
+                break
             }
         }
         return sb.toString().trim()

@@ -37,6 +37,9 @@ class AppLogicTest {
         assertEquals("C8:47:8C:11:22:33", MacPayloadParser.extractMac("c8:47:8c:11:22:33"))
         assertEquals("C8:47:8C:11:22:33", MacPayloadParser.extractMac("jkbms://connect?mac=c8-47-8c-11-22-33"))
         assertEquals("C8:47:8C:11:22:33", MacPayloadParser.extractMac("C8478C112233"))
+        assertEquals("C8:47:8C:11:22:33", MacPayloadParser.extractMac("mac_c8478c112233"))
+        assertEquals("C8:47:8C:11:22:33", MacPayloadParser.extractMac("SN:CAFEBABE1234 MAC:c8478c112233"))
+        assertNull(MacPayloadParser.extractMac("AA:BB:CC:DD:EE:FF:11:22"))
         assertNull(MacPayloadParser.extractMac("not-a-mac-address"))
     }
 
@@ -96,6 +99,10 @@ class AppLogicTest {
         val downsampled = ChartAxisScaler.downsample(dense, maxPoints = 96)
         assertEquals(96, downsampled.size)
         assertEquals(34.5f, downsampled.last(), 0.001f)
+
+        // Non-finite inputs must not produce NaN bounds
+        val nanBounds = ChartAxisScaler.computeBounds(listOf(Float.NaN, Float.POSITIVE_INFINITY), ChartMetric.PACK_VOLTAGE)
+        assertTrue(nanBounds.min.isFinite() && nanBounds.max.isFinite())
     }
 
     @Test

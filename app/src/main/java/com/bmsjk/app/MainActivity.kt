@@ -44,7 +44,8 @@ class MainActivity : ComponentActivity() {
             val permissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestMultiplePermissions()
             ) { grants ->
-                hasBlePermissions = grants.values.all { it } || hasAllPermissions(requiredPermissions)
+                hasBlePermissions = (grants.isNotEmpty() && grants.values.all { it }) ||
+                    hasAllPermissions(requiredPermissions)
                 if (hasBlePermissions) {
                     viewModel.triggerInitialScanIfNeeded(true)
                 }

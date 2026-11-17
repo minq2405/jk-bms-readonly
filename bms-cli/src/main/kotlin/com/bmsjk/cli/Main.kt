@@ -10,6 +10,7 @@ import com.bmsjk.core.session.BmsSessionEngine
 import com.bmsjk.core.session.PasscodeStatus
 import java.io.File
 import java.util.Locale
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     var mode = ProtocolMode.AUTO
@@ -20,12 +21,26 @@ fun main(args: Array<String>) {
     while (i < args.size) {
         when (args[i]) {
             "--mode" -> {
-                val value = args.getOrNull(i + 1)?.uppercase(Locale.US) ?: "AUTO"
-                mode = ProtocolMode.valueOf(value)
+                val raw = args.getOrNull(i + 1)
+                if (raw == null || raw.startsWith("--")) {
+                    System.err.println("Missing value for --mode. Allowed: ${ProtocolMode.entries.joinToString()}")
+                    exitProcess(1)
+                }
+                val parsed = runCatching { ProtocolMode.valueOf(raw.uppercase(Locale.US)) }.getOrNull()
+                if (parsed == null) {
+                    System.err.println("Invalid --mode '$raw'. Allowed: ${ProtocolMode.entries.joinToString()}")
+                    exitProcess(1)
+                }
+                mode = parsed
                 i += 2
             }
             "--passcode" -> {
-                passcode = args.getOrNull(i + 1)
+                val raw = args.getOrNull(i + 1)
+                if (raw == null || raw.startsWith("--")) {
+                    System.err.println("Missing value for --passcode")
+                    exitProcess(1)
+                }
+                passcode = raw
                 i += 2
             }
             else -> {
@@ -37,7 +52,10 @@ fun main(args: Array<String>) {
 
     val lines = if (filePath != null) {
         val file = File(filePath)
-        require(file.exists()) { "Capture file not found: $filePath" }
+        if (!file.exists() || !file.isFile) {
+            System.err.println("Capture file not found: $filePath")
+            exitProcess(1)
+        }
         file.readLines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
     } else {
         println("No capture file supplied; running built-in syssi JK02_24S real sample frames...")
@@ -49,32 +67,52 @@ fun main(args: Array<String>) {
 
     println("=== JK BMS Read-Only Backend CLI (mode=${mode.name}) ===")
     for ((idx, line) in lines.withIndex()) {
-        val raw = JkFrameCodec.parseHexString(line)
+        val raw = try {
+            JkFrameCodec.parseHexString(line)
+        } catch (e: IllegalArgumentException) {
+            println("[Line #${idx + 1}] Invalid hex input: ${e.message}")
+            continue
+        }
+        if (raw.isEmpty()) continue
+
         // Simulate realistic 20-byte BLE MTU notifications
         val chunks = raw.toList().chunked(20).map { it.toByteArray() }
-        var decoded: DecodedFrame? = null
+        val decodedFrames = ArrayList<DecodedFrame>()
         for (chunk in chunks) {
-            val res = engine.onNotificationChunk(chunk)
-            if (res != null) decoded = res
+            decodedFrames.addAll(engine.onNotificationChunkAll(chunk))
         }
 
-        if (decoded == null) {
+        if (decodedFrames.isEmpty()) {
             println("[Frame #${idx + 1}] Incomplete or CRC error (crcErrors=${engine.snapshot.value.crcErrorCount})")
             continue
         }
 
-        when (decoded) {
-            is DecodedFrame.DeviceInfoFrame -> {
-                printDeviceInfo(decoded.deviceInfo, engine.snapshot.value.detectedVariant?.name)
-                if (engine.snapshot.value.passcodeStatus is PasscodeStatus.Required) {
-                    val code = passcode ?: decoded.deviceInfo.devicePasscode
-                    val status = engine.submitPasscode(code)
-                    println("  Passcode check -> $status")
+        for (decoded in decodedFrames) {
+            when (decoded) {
+                is DecodedFrame.DeviceInfoFrame -> {
+                    printDeviceInfo(decoded.deviceInfo, engine.snapshot.value.detectedVariant?.name)
+                    if (engine.snapshot.value.passcodeStatus is PasscodeStatus.Required) {
+                        val code = passcode ?: decoded.deviceInfo.devicePasscode
+                        val status = engine.submitPasscode(code)
+                        println("  Passcode check -> $status")
+                    }
                 }
+                is DecodedFrame.SettingsFrame -> {
+                    if (engine.snapshot.value.isUnlocked) {
+                        printSettings(decoded.settings)
+                    } else {
+                        println("[0x01] SETTINGS locked (passcode required/mismatch)")
+                    }
+                }
+                is DecodedFrame.CellInfoFrame -> {
+                    if (engine.snapshot.value.isUnlocked) {
+                        printTelemetry(decoded.telemetry)
+                    } else {
+                        println("[0x02] CELL INFO locked (passcode required/mismatch)")
+                    }
+                }
+                is DecodedFrame.UnsupportedFrame -> println("Unsupported frame type=0x${decoded.frameType.toString(16)}")
             }
-            is DecodedFrame.SettingsFrame -> printSettings(decoded.settings)
-            is DecodedFrame.CellInfoFrame -> printTelemetry(decoded.telemetry)
-            is DecodedFrame.UnsupportedFrame -> println("Unsupported frame type=0x${decoded.frameType.toString(16)}")
         }
     }
 }

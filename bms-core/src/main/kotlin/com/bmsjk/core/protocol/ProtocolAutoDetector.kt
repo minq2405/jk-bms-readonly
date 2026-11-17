@@ -23,15 +23,41 @@ object ProtocolAutoDetector {
 
     /**
      * Heuristic fallback when Frame 0x02 arrives before Frame 0x03 or HW string is non-standard.
-     * Distinguishes JK02_32S vs JK02_24S by comparing the sum of cell voltages against
-     * totalVoltage at offset 150 (32S) vs offset 118 (24S).
+     * Distinguishes JK04 (IEEE-754 floats) vs JK02_32S vs JK02_24S by checking cell/total voltage
+     * consistency and protocol-specific markers.
      */
     fun detectFromCellFrame(frame: ByteArray): ProtocolVariant {
+        val score04 = scoreJk04Candidate(frame)
         val score32s = scoreJk02Candidate(frame, is32s = true)
         val score24s = scoreJk02Candidate(frame, is32s = false)
-        if (score32s >= score24s && score32s > 0) return ProtocolVariant.JK02_32S
+        if (score04 > score32s && score04 > score24s && score04 > 0) return ProtocolVariant.JK04
+        if (score32s > score24s && score32s > 0) return ProtocolVariant.JK02_32S
         if (score24s > score32s && score24s > 0) return ProtocolVariant.JK02_24S
+        if (score32s == score24s && score32s > 0) return ProtocolVariant.JK02_32S
         return ProtocolVariant.JK02_32S
+    }
+
+    private fun scoreJk04Candidate(frame: ByteArray): Int {
+        if (frame.size < JkFrameCodec.FRAME_SIZE) return -1
+        var validCells = 0
+        var validRes = 0
+        for (i in 0 until 24) {
+            val v = ByteReader.f32LE(frame, 6 + i * 4)
+            if (v.isFinite() && v in 0.5f..5.5f) {
+                validCells++
+                val r = ByteReader.f32LE(frame, 102 + i * 4)
+                if (r.isFinite() && r in 0f..10f) {
+                    validRes++
+                }
+            }
+        }
+        if (validCells < 2) return -1
+        var score = validCells + validRes
+        val balAction = ByteReader.u8(frame, 220)
+        if (balAction in 0..2) {
+            score += 2
+        }
+        return score
     }
 
     private fun scoreJk02Candidate(frame: ByteArray, is32s: Boolean): Int {
@@ -43,12 +69,17 @@ object ProtocolAutoDetector {
         val mask = ByteReader.u32LE(frame, 54 + cellOffset)
         var sumV = 0f
         var active = 0
+        var outOfRangeInMask = 0
         for (i in 0 until maxCells) {
             val v = ByteReader.u16LE(frame, 6 + i * 2) * 0.001f
-            val bitSet = mask == 0L || ((mask ushr i) and 0x1L) == 0x1L
-            if (bitSet && v in 0.5f..5.0f) {
-                sumV += v
-                active++
+            val bitSet = if (mask != 0L) ((mask ushr i) and 0x1L) == 0x1L else v > 0f
+            if (bitSet) {
+                if (v in 0.5f..5.0f) {
+                    sumV += v
+                    active++
+                } else {
+                    outOfRangeInMask++
+                }
             }
         }
         if (active == 0) return -1
@@ -57,10 +88,13 @@ object ProtocolAutoDetector {
         val soc = ByteReader.u8(frame, 141 + tailOffset)
         var score = 0
         if (totalV > 3f && abs(totalV - sumV) <= maxOf(1.5f, sumV * 0.05f)) {
-            score += 10
+            score += 12
         }
-        if (soc in 0..100) {
-            score += 2
+        if (mask != 0L && outOfRangeInMask == 0) {
+            score += 4
+        }
+        if (score > 0 && soc in 0..100) {
+            score += 1
         }
         return score
     }

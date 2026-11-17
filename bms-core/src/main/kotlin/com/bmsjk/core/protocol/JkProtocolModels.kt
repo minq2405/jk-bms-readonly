@@ -153,7 +153,7 @@ data class BmsTelemetry(
 ) {
     val maxTemperatureC: Float?
         get() = listOfNotNull(mosfetTempC, temp1C, temp2C, temp3C, temp4C, temp5C)
-            .filter { it > -50f && it < 150f }
+            .filter { it.isFinite() && it > -100f && it < 200f }
             .maxOrNull()
 }
 

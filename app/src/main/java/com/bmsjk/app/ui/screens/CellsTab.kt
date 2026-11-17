@@ -59,7 +59,7 @@ fun CellsTab(
             return
         }
 
-        val activeCells = telemetry.cells.filter { it.enabled && it.voltageV > 0f }
+        val activeCells = telemetry.cells.filter { it.enabled }
             .ifEmpty { telemetry.cells }
 
         OledCard(modifier = Modifier.fillMaxWidth()) {

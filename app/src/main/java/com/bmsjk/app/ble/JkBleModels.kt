@@ -42,15 +42,19 @@ object JkBleFilter {
  * Extracts a normalized MAC address (AA:BB:CC:DD:EE:FF) from raw QR text, URL, or JSON.
  */
 object MacPayloadParser {
-    private val COLON_OR_DASH_MAC = Regex("([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}")
-    private val COMPACT_MAC = Regex("\\b[0-9A-Fa-f]{12}\\b")
+    private val COLON_OR_DASH_MAC = Regex("(?<![0-9A-Fa-f:-])([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f:-])")
+    private val LABELED_COMPACT_MAC = Regex("(?:mac|addr|address|ble)\\s*[:=_\\-]?\\s*([0-9A-Fa-f]{12})(?![0-9A-Fa-f])", RegexOption.IGNORE_CASE)
+    private val STANDALONE_COMPACT_MAC = Regex("(?<![0-9A-Fa-f])[0-9A-Fa-f]{12}(?![0-9A-Fa-f])")
 
     fun extractMac(raw: String): String? {
         val trimmed = raw.trim()
         COLON_OR_DASH_MAC.find(trimmed)?.let { match ->
             return match.value.replace('-', ':').uppercase()
         }
-        COMPACT_MAC.find(trimmed)?.let { match ->
+        LABELED_COMPACT_MAC.find(trimmed)?.let { match ->
+            return match.groupValues[1].uppercase().chunked(2).joinToString(":")
+        }
+        STANDALONE_COMPACT_MAC.find(trimmed)?.let { match ->
             return match.value.uppercase().chunked(2).joinToString(":")
         }
         return null

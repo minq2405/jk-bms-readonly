@@ -57,10 +57,11 @@ object ChartAxisScaler {
     }
 
     fun computeBounds(values: List<Float>, metric: ChartMetric): ChartAxisBounds {
-        if (values.isEmpty()) return ChartAxisBounds(0f, 1f)
+        val finite = values.filter { it.isFinite() }
+        if (finite.isEmpty()) return ChartAxisBounds(0f, 1f)
         var rawMin = Float.MAX_VALUE
         var rawMax = -Float.MAX_VALUE
-        for (v in values) {
+        for (v in finite) {
             if (v < rawMin) rawMin = v
             if (v > rawMax) rawMax = v
         }
@@ -114,7 +115,7 @@ fun LiveTrendChartCanvas(
             ChartMetric.DELTA_MV -> sample.deltaCellMv
             ChartMetric.MAX_TEMPERATURE -> sample.maxTempC
         }
-    }
+    }.filter { it.isFinite() }
 
     if (rawValues.isEmpty()) {
         Box(
@@ -158,8 +159,9 @@ fun LiveTrendChartCanvas(
 
             val count = plotted.size
             for (i in plotted.indices) {
-                val x = if (count == 1) w else (i.toFloat() / (count - 1)) * w
-                val norm = ((plotted[i] - bounds.min) / bounds.span).coerceIn(0f, 1f)
+                val x = if (count == 1) w - 6.dp.toPx() else (i.toFloat() / (count - 1)) * w
+                val rawNorm = (plotted[i] - bounds.min) / bounds.span
+                val norm = if (rawNorm.isFinite()) rawNorm.coerceIn(0f, 1f) else 0.5f
                 val y = (h - padY) - norm * usableH
                 if (i == 0) {
                     linePath.moveTo(x, y)

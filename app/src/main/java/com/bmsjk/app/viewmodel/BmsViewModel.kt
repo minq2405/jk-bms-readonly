@@ -240,8 +240,7 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         showDisconnectPrompt.value = false
         isViewingSavedSnapshot.value = false
         bleManager.disconnect()
-        engine.startSession("")
-        engine.clearChartHistory()
+        engine.clearSession()
         bannerMessage.value = null
     }
 
@@ -267,7 +266,7 @@ class BmsViewModel(application: Application) : AndroidViewModel(application) {
         val status = engine.submitPasscode(code)
         if (status is PasscodeStatus.Unlocked) {
             bannerMessage.value = null
-            bleManager.triggerImmediateCellRefresh()
+            bleManager.onSessionUnlocked()
             selectedTab.value = AppTab.MONITOR
         }
     }

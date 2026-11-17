@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,6 +78,10 @@ fun ConnectTab(
     var showQrDialog by rememberSaveable { mutableStateOf(false) }
     var qrInput by rememberSaveable { mutableStateOf("") }
     var passcodeInput by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(state.session.deviceAddress) {
+        passcodeInput = ""
+    }
 
     Column(
         modifier = Modifier
@@ -318,7 +323,7 @@ fun ConnectTab(
                         .copy(textAlign = TextAlign.Center),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.NumberPassword,
+                        keyboardType = KeyboardType.Password,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(

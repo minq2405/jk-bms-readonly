@@ -5,12 +5,17 @@ import com.bmsjk.core.session.ChartMetric
 import com.bmsjk.core.session.ChartWindow
 import com.bmsjk.core.session.InMemoryPasscodeStore
 import com.bmsjk.core.session.PasscodeStatus
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 
 class JkProtocolTest {
 
@@ -282,5 +287,196 @@ class JkProtocolTest {
         assertTrue(auto is PasscodeStatus.Unlocked && auto.autoUnlocked)
         secondSession.onValidatedFrame(cellInfo, timestampMs = 2_000L)
         assertNotNull(secondSession.snapshot.value.telemetry)
+    }
+
+    private fun buildTestFrame(frameType: Int, fill: (ByteArray) -> Unit = {}): ByteArray {
+        val f = ByteArray(JkFrameCodec.FRAME_SIZE)
+        f[0] = 0x55
+        f[1] = 0xAA.toByte()
+        f[2] = 0xEB.toByte()
+        f[3] = 0x90.toByte()
+        f[4] = frameType.toByte()
+        fill(f)
+        f[299] = JkFrameCodec.crc8(f, 299)
+        return f
+    }
+
+    @Test
+    fun frameAssemblerHandlesSplitHeaderTrailingBytesMidPayloadAndConcatenatedFrames() {
+        val f1 = buildTestFrame(JkFrameCodec.FRAME_TYPE_CELL_INFO) { it[5] = 1 }
+        val f2 = buildTestFrame(JkFrameCodec.FRAME_TYPE_CELL_INFO) { f ->
+            f[5] = 2
+            // Mid-frame payload coincidence at offset 160
+            f[160] = 0x55
+            f[161] = 0xAA.toByte()
+            f[162] = 0xEB.toByte()
+            f[163] = 0x90.toByte()
+        }
+
+        val assembler = FrameAssembler()
+        // Out-of-sync junk
+        assertEquals(FrameAssembleResult.IgnoredOutOfSync, assembler.appendChunk(byteArrayOf(1, 2, 3)))
+
+        // Split 4-byte preamble across two chunks
+        assertEquals(FrameAssembleResult.Incomplete, assembler.appendChunk(f1.copyOfRange(0, 2)))
+        assertEquals(FrameAssembleResult.Incomplete, assembler.appendChunk(f1.copyOfRange(2, 290)))
+
+        // Chunk with last 10B of f1 + first 10B of f2
+        val bridge = f1.copyOfRange(290, 300) + f2.copyOfRange(0, 10)
+        val res1 = assembler.appendChunk(bridge)
+        assertTrue(res1 is FrameAssembleResult.Assembled)
+        assertArrayEquals(f1, (res1 as FrameAssembleResult.Assembled).frame)
+
+        // Next chunk starts at offset 10..160, then 160..300 (which starts with 55 AA EB 90!)
+        assertEquals(FrameAssembleResult.Incomplete, assembler.appendChunk(f2.copyOfRange(10, 160)))
+        val res2 = assembler.appendChunk(f2.copyOfRange(160, 300))
+        assertTrue(res2 is FrameAssembleResult.Assembled)
+        assertArrayEquals(f2, (res2 as FrameAssembleResult.Assembled).frame)
+
+        // Two concatenated frames in one notification
+        val both = assembler.appendChunkAll(f1 + f2)
+        assertEquals(2, both.size)
+        assertTrue(both.all { it is FrameAssembleResult.Assembled })
+    }
+
+    @Test
+    fun codecHexParserAndCStringAndMfgDateHandleEdgeCases() {
+        assertArrayEquals(byteArrayOf(0x55, 0xAA.toByte()), JkFrameCodec.parseHexString("0x55 0xAA"))
+        assertThrows(IllegalArgumentException::class.java) {
+            JkFrameCodec.parseHexString("0x5")
+        }
+
+        val raw = ByteArray(16)
+        raw[0] = 0xFF.toByte()
+        raw[1] = 'A'.code.toByte()
+        assertEquals("", ByteReader.cString(raw, 0, 16))
+
+        val dev8 = buildTestFrame(JkFrameCodec.FRAME_TYPE_DEVICE_INFO) { f ->
+            "20220407".encodeToByteArray().copyInto(f, 78)
+        }
+        assertEquals("20220407", Jk02Parser.parseDeviceInfo(dev8).manufacturingDate)
+    }
+
+    @Test
+    fun cellSummaryPreservesEnabledZeroVoltCellAndWireWarning() {
+        val frame = buildTestFrame(JkFrameCodec.FRAME_TYPE_CELL_INFO) { f ->
+            f[6] = 0xE8.toByte(); f[7] = 0x0C // 3.304V
+            f[8] = 0x00; f[9] = 0x00          // 0.000V broken wire
+            f[10] = 0xEA.toByte(); f[11] = 0x0C // 3.306V
+            f[54] = 0x07 // cells 1..3 enabled
+            f[114] = 0x02 // wire warning on cell #2
+        }
+        val telemetry = Jk02Parser.parseCellInfo(frame, ProtocolVariant.JK02_24S)
+        assertEquals(3, telemetry.enabledCellCount)
+        assertEquals(2, telemetry.minVoltageCellIndex)
+        assertEquals(0f, telemetry.minCellVoltageV, 0.0001f)
+        assertTrue(telemetry.cells[1].wireWarning)
+    }
+
+    @Test
+    fun autoDetectorDetectsJk04CellFrameAndLowVoltageJk02_24sFrame() {
+        val decoder = JkFrameDecoder(ProtocolMode.AUTO)
+        val jk04Decoded = decoder.decode(JkFrameCodec.parseHexString(jk04CellInfoHex)) as DecodedFrame.CellInfoFrame
+        assertEquals(ProtocolVariant.JK04, jk04Decoded.telemetry.protocol)
+
+        val decoder2 = JkFrameDecoder(ProtocolMode.AUTO)
+        val raw24 = JkFrameCodec.parseHexString(jk02_24sCellInfoHex)
+        // Zero out totalVoltageV (bytes 118..121) and recompute CRC
+        for (i in 118..121) raw24[i] = 0
+        raw24[299] = JkFrameCodec.crc8(raw24, 299)
+        val d24 = decoder2.decode(raw24) as DecodedFrame.CellInfoFrame
+        assertEquals(ProtocolVariant.JK02_24S, d24.telemetry.protocol)
+    }
+
+    @Test
+    fun jk04SettingsSanitizesNonFiniteFloatsAndSeriesBufferRejectsInvalidCapacity() {
+        val frame = buildTestFrame(JkFrameCodec.FRAME_TYPE_SETTINGS) { f ->
+            for (i in 38..41) f[i] = 0xFF.toByte()
+            for (i in 74..77) f[i] = 0xFF.toByte()
+            for (i in 98..101) f[i] = 0xFF.toByte()
+        }
+        val settings = Jk04Parser.parseSettings(frame)
+        assertTrue(settings.powerOffVoltageV.isFinite() && settings.powerOffVoltageV == 0f)
+        assertTrue(settings.startBalanceVoltageV.isFinite() && settings.startBalanceVoltageV == 0f)
+        assertNull(settings.jk04VoltageCalibration)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            com.bmsjk.core.session.SeriesBuffer(0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            com.bmsjk.core.session.SeriesBuffer(-5)
+        }
+    }
+
+    @Test
+    fun sessionEngineThreadSafetyDeviceSwitchClearAndPendingSettingsWork() {
+        val store = InMemoryPasscodeStore()
+        val engine = BmsSessionEngine(passcodeStore = store, maxChartSamples = 500)
+        val devLocked = JkFrameCodec.parseHexString(jk02_24sDeviceInfoHex)
+        val settingsFrame = JkFrameCodec.parseHexString(jk02_24sSettingsHex)
+        val cellFrame = JkFrameCodec.parseHexString(jk02_24sCellInfoHex)
+
+        engine.startSession("AA:AA:AA:AA:AA:AA")
+        engine.onValidatedFrame(devLocked)
+        // Settings arrives before user enters passcode -> cached until unlock
+        engine.onValidatedFrame(settingsFrame)
+        assertNull(engine.snapshot.value.settings)
+        assertTrue(engine.submitPasscode("1234") is PasscodeStatus.Unlocked)
+        assertNotNull(engine.snapshot.value.settings)
+
+        engine.onValidatedFrame(cellFrame, 1_000L)
+        assertEquals(1, engine.queryChart(ChartWindow.FULL_SESSION, 1_000L).size)
+
+        // Switching directly to device B clears chart history
+        engine.startSession("BB:BB:BB:BB:BB:BB")
+        assertEquals(0, engine.queryChart(ChartWindow.FULL_SESSION, 2_000L).size)
+
+        // clearChartHistory increments chartRevision
+        engine.onValidatedFrame(devLocked)
+        assertTrue(engine.submitPasscode("1234") is PasscodeStatus.Unlocked)
+        engine.onValidatedFrame(cellFrame, 2_000L)
+        val revBefore = engine.snapshot.value.chartRevision
+        engine.clearChartHistory()
+        assertEquals(revBefore + 1L, engine.snapshot.value.chartRevision)
+        assertEquals(0, engine.queryChart(ChartWindow.FULL_SESSION, 2_000L).size)
+
+        // Concurrent updates must not lose validFrameCount or throw
+        val iterations = 2_000
+        val baseCount = engine.snapshot.value.validFrameCount
+        val err = AtomicReference<Throwable?>(null)
+        val latch = CountDownLatch(2)
+        val pool = Executors.newFixedThreadPool(2)
+        pool.submit {
+            try {
+                for (i in 1..iterations) {
+                    engine.onValidatedFrame(cellFrame, 3_000L + i)
+                }
+            } catch (t: Throwable) {
+                err.compareAndSet(null, t)
+            } finally {
+                latch.countDown()
+            }
+        }
+        pool.submit {
+            try {
+                for (i in 1..iterations) {
+                    engine.setProtocolMode(if (i % 2 == 0) ProtocolMode.JK02_24S else ProtocolMode.AUTO)
+                    engine.queryChart(ChartWindow.FIVE_MINUTES, 3_000L + i)
+                    engine.queryMetricStats(ChartMetric.PACK_VOLTAGE, ChartWindow.FIVE_MINUTES, 3_000L + i)
+                }
+            } catch (t: Throwable) {
+                err.compareAndSet(null, t)
+            } finally {
+                latch.countDown()
+            }
+        }
+        latch.await()
+        pool.shutdown()
+        assertNull(err.get())
+        assertEquals(baseCount + iterations, engine.snapshot.value.validFrameCount)
+
+        // clearSession nulls deviceAddress
+        engine.clearSession()
+        assertNull(engine.snapshot.value.deviceAddress)
     }
 }

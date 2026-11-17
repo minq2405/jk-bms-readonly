@@ -59,12 +59,24 @@ class JkBleManager(
     val scanCompletedOnce: StateFlow<Boolean> = _scanCompletedOnce.asStateFlow()
 
     private val discoveredMap = LinkedHashMap<String, BleDeviceItem>()
+    private val discoveredLock = Any()
     private val connectionLock = Any()
+    private val writeQueue = ArrayDeque<ByteArray>()
+    private var writeInFlight = false
+    private var lastWriteDispatchMs = 0L
+
     private var scanStopJob: Job? = null
     private var pollJob: Job? = null
+    private var discoveryTimeoutJob: Job? = null
     private var handshakeTimeoutJob: Job? = null
+
+    @Volatile
     private var activeGatt: BluetoothGatt? = null
+
+    @Volatile
     private var writeChar: BluetoothGattCharacteristic? = null
+
+    @Volatile
     private var notifyChar: BluetoothGattCharacteristic? = null
 
     @Volatile
@@ -91,7 +103,9 @@ class JkBleManager(
         }
 
         stopScanInternal()
-        discoveredMap.clear()
+        synchronized(discoveredLock) {
+            discoveredMap.clear()
+        }
         _scannedDevices.value = emptyList()
         _isScanning.value = true
 
@@ -148,32 +162,38 @@ class JkBleManager(
         }
 
         stopScanInternal()
-        userInitiatedDisconnect = true
-        closeGattInternal()
+        synchronized(connectionLock) {
+            userInitiatedDisconnect = true
+            closeGattInternalLocked()
+
+            engine.startSession(normalized)
+            lastCellRxMs = 0L
+            receivedValidBmsFrame = false
+            wasConnectedOnce = false
+            userInitiatedDisconnect = false
+        }
 
         val label = displayName?.takeIf { it.isNotBlank() }
             ?: runCatching { device.name }.getOrNull()
             ?: normalized
 
-        engine.startSession(normalized)
-        lastCellRxMs = 0L
-        receivedValidBmsFrame = false
-        wasConnectedOnce = false
-        userInitiatedDisconnect = false
         _connectionState.value = BleConnectionState.Connecting(normalized, label)
 
         try {
-            val gatt = device.connectGatt(
-                appContext,
-                false,
-                gattCallback,
-                BluetoothDevice.TRANSPORT_LE
-            )
-            if (gatt == null) {
-                _connectionState.value = BleConnectionState.Error("Failed to open GATT connection to $label")
-                return
+            synchronized(connectionLock) {
+                val gatt = device.connectGatt(
+                    appContext,
+                    false,
+                    gattCallback,
+                    BluetoothDevice.TRANSPORT_LE
+                )
+                if (gatt == null) {
+                    _connectionState.value = BleConnectionState.Error("Failed to open GATT connection to $label")
+                    return
+                }
+                activeGatt = gatt
             }
-            activeGatt = gatt
+            startDiscoveryWatchdog(label)
         } catch (sec: SecurityException) {
             closeGattInternal()
             _connectionState.value = BleConnectionState.Error(
@@ -188,10 +208,18 @@ class JkBleManager(
     }
 
     fun disconnect() {
-        userInitiatedDisconnect = true
-        wasConnectedOnce = false
-        closeGattInternal()
+        synchronized(connectionLock) {
+            userInitiatedDisconnect = true
+            wasConnectedOnce = false
+            closeGattInternalLocked()
+        }
         _connectionState.value = BleConnectionState.Disconnected
+    }
+
+    fun onSessionUnlocked() {
+        if (!engine.snapshot.value.isUnlocked) return
+        lastCellRxMs = System.currentTimeMillis()
+        triggerImmediateCellRefresh()
     }
 
     fun triggerImmediateCellRefresh() {
@@ -204,8 +232,8 @@ class JkBleManager(
     private fun failConnection(reason: String) {
         synchronized(connectionLock) {
             wasConnectedOnce = false
+            closeGattInternalLocked()
         }
-        closeGattInternal()
         _connectionState.value = BleConnectionState.Error(reason)
     }
 
@@ -213,16 +241,27 @@ class JkBleManager(
         synchronized(connectionLock) {
             if (!wasConnectedOnce || userInitiatedDisconnect) return
             wasConnectedOnce = false
+            closeGattInternalLocked()
         }
-        closeGattInternal()
         _connectionState.value = BleConnectionState.ConnectionLost(addr, name, reason)
     }
 
     private fun closeGattInternal() {
+        synchronized(connectionLock) {
+            closeGattInternalLocked()
+        }
+    }
+
+    private fun closeGattInternalLocked() {
+        discoveryTimeoutJob?.cancel()
+        discoveryTimeoutJob = null
         handshakeTimeoutJob?.cancel()
         handshakeTimeoutJob = null
         pollJob?.cancel()
         pollJob = null
+        writeQueue.clear()
+        writeInFlight = false
+        lastWriteDispatchMs = 0L
         writeChar = null
         notifyChar = null
         val gatt = activeGatt
@@ -249,23 +288,28 @@ class JkBleManager(
                 val hasJkService = uuids.any { it == JkFrameCodec.SERVICE_UUID }
                 val displayName = rawName?.takeIf { it.isNotBlank() } ?: "JK BMS ($addr)"
 
-                discoveredMap[addr] = BleDeviceItem(
-                    address = addr,
-                    name = displayName,
-                    rssi = result.rssi,
-                    hasJkService = hasJkService
-                )
+                val sorted = synchronized(discoveredLock) {
+                    discoveredMap[addr] = BleDeviceItem(
+                        address = addr,
+                        name = displayName,
+                        rssi = result.rssi,
+                        hasJkService = hasJkService
+                    )
+                    discoveredMap.values.sortedWith(
+                        compareByDescending<BleDeviceItem> { it.hasJkService }
+                            .thenByDescending { it.rssi }
+                    )
+                }
 
-                _scannedDevices.value = discoveredMap.values.sortedWith(
-                    compareByDescending<BleDeviceItem> { it.hasJkService }
-                        .thenByDescending { it.rssi }
-                )
+                _scannedDevices.value = sorted
             } catch (_: Throwable) {
                 // Ignore malformed advertisement packets from nearby BLE devices
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
+            scanStopJob?.cancel()
+            scanStopJob = null
             _isScanning.value = false
             _connectionState.value = BleConnectionState.Error("BLE scan failed (code=$errorCode)")
         }
@@ -273,6 +317,7 @@ class JkBleManager(
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            if (gatt !== activeGatt) return
             try {
                 val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
                 val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
@@ -309,6 +354,7 @@ class JkBleManager(
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            if (gatt !== activeGatt) return
             try {
                 if (!gatt.discoverServices()) {
                     failConnection("Unable to discover BLE services after MTU")
@@ -319,6 +365,7 @@ class JkBleManager(
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            if (gatt !== activeGatt) return
             try {
                 val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
                 val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
@@ -348,7 +395,7 @@ class JkBleManager(
                 val nChar = candidates.firstOrNull { char ->
                     (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0 ||
                         (char.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
-                } ?: wChar
+                }
 
                 if (wChar == null || nChar == null) {
                     failConnection("Incompatible BLE module: missing write/notify on 0xFFE1")
@@ -364,10 +411,17 @@ class JkBleManager(
 
                 val cccd = nChar.getDescriptor(JkFrameCodec.CCCD_UUID)
                 if (cccd != null) {
-                    if (!writeDescriptorCompat(gatt, cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
+                    val enableVal = if ((nChar.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                        BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    } else {
+                        BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                    }
+                    if (!writeDescriptorCompat(gatt, cccd, enableVal)) {
                         failConnection("Failed to write CCCD descriptor on 0xFFE1")
                     }
                 } else {
+                    discoveryTimeoutJob?.cancel()
+                    discoveryTimeoutJob = null
                     _connectionState.value = BleConnectionState.Connected(addr, name)
                     beginHandshake(gatt, wChar)
                 }
@@ -381,6 +435,7 @@ class JkBleManager(
             descriptor: BluetoothGattDescriptor,
             status: Int
         ) {
+            if (gatt !== activeGatt) return
             try {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     failConnection("Failed to subscribe JK BMS notifications (status=$status)")
@@ -388,11 +443,37 @@ class JkBleManager(
                 }
                 val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
                 val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
-                val wChar = writeChar ?: return
+                val wChar = writeChar ?: run {
+                    failConnection("Handshake setup failed: missing write characteristic")
+                    return
+                }
+                discoveryTimeoutJob?.cancel()
+                discoveryTimeoutJob = null
                 _connectionState.value = BleConnectionState.Connected(addr, name)
                 beginHandshake(gatt, wChar)
             } catch (t: Throwable) {
                 failConnection("Handshake setup failed: ${t.message ?: t::class.java.simpleName}")
+            }
+        }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            if (gatt !== activeGatt) return
+            synchronized(connectionLock) {
+                val next = writeQueue.removeFirstOrNull()
+                if (next == null) {
+                    writeInFlight = false
+                    return
+                }
+                val wChar = writeChar
+                if (wChar == null || !performGattWrite(gatt, wChar, next)) {
+                    writeInFlight = false
+                } else {
+                    lastWriteDispatchMs = System.currentTimeMillis()
+                }
             }
         }
 
@@ -401,6 +482,7 @@ class JkBleManager(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
+            if (gatt !== activeGatt) return
             @Suppress("DEPRECATION")
             val payload = characteristic.value ?: return
             handleIncomingChunk(gatt, payload)
@@ -411,29 +493,37 @@ class JkBleManager(
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray
         ) {
+            if (gatt !== activeGatt) return
             handleIncomingChunk(gatt, value)
         }
     }
 
     private fun handleIncomingChunk(gatt: BluetoothGatt, chunk: ByteArray) {
+        if (gatt !== activeGatt) return
         try {
-            val decoded = engine.onNotificationChunk(chunk) ?: return
+            val decodedFrames = engine.onNotificationChunkAll(chunk)
+            if (decodedFrames.isEmpty()) return
             receivedValidBmsFrame = true
             wasConnectedOnce = true
             handshakeTimeoutJob?.cancel()
-            when (decoded) {
-                is DecodedFrame.DeviceInfoFrame -> {
-                    if (engine.snapshot.value.isUnlocked) {
-                        writeChar?.let { wChar ->
-                            writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
+            for (decoded in decodedFrames) {
+                when (decoded) {
+                    is DecodedFrame.DeviceInfoFrame -> {
+                        if (engine.snapshot.value.isUnlocked) {
+                            lastCellRxMs = System.currentTimeMillis()
+                            writeChar?.let { wChar ->
+                                writeReadCommand(gatt, wChar, engine.nextReadCellInfoFrame())
+                            }
                         }
                     }
+                    is DecodedFrame.CellInfoFrame -> {
+                        if (engine.snapshot.value.isUnlocked) {
+                            lastCellRxMs = System.currentTimeMillis()
+                        }
+                    }
+                    is DecodedFrame.SettingsFrame,
+                    is DecodedFrame.UnsupportedFrame -> Unit
                 }
-                is DecodedFrame.CellInfoFrame -> {
-                    lastCellRxMs = System.currentTimeMillis()
-                }
-                is DecodedFrame.SettingsFrame,
-                is DecodedFrame.UnsupportedFrame -> Unit
             }
         } catch (t: Throwable) {
             failConnection("Incompatible telemetry stream: ${t.message ?: t::class.java.simpleName}")
@@ -449,11 +539,21 @@ class JkBleManager(
         startPollLoop(gatt, wChar)
     }
 
+    private fun startDiscoveryWatchdog(label: String) {
+        discoveryTimeoutJob?.cancel()
+        discoveryTimeoutJob = scope.launch {
+            delay(12_000L)
+            if (activeGatt != null && writeChar == null && !userInitiatedDisconnect) {
+                failConnection("BLE discovery timed out on $label")
+            }
+        }
+    }
+
     private fun startHandshakeWatchdog() {
         handshakeTimeoutJob?.cancel()
         handshakeTimeoutJob = scope.launch {
             delay(7_000L)
-            if (!receivedValidBmsFrame && activeGatt != null) {
+            if (!receivedValidBmsFrame && activeGatt != null && !userInitiatedDisconnect) {
                 failConnection("No valid JK BMS response received — device is not a compatible JK BMS")
             }
         }
@@ -465,14 +565,26 @@ class JkBleManager(
             var requestedInitialCells = false
             while (isActive) {
                 delay(1_000L)
+                if (gatt !== activeGatt) break
                 val snap = engine.snapshot.value
-                if (!snap.isUnlocked) continue
+                if (!snap.isUnlocked) {
+                    requestedInitialCells = false
+                    continue
+                }
                 val now = System.currentTimeMillis()
-                if (wasConnectedOnce && !userInitiatedDisconnect && lastCellRxMs > 0L && now - lastCellRxMs > 10_000L) {
+                if (lastCellRxMs == 0L) {
+                    lastCellRxMs = now
+                }
+                if (wasConnectedOnce && !userInitiatedDisconnect && now - lastCellRxMs > 10_000L) {
                     val addr = runCatching { gatt.device?.address?.uppercase() }.getOrNull().orEmpty()
                     val name = runCatching { gatt.device?.name }.getOrNull() ?: addr
                     emitConnectionLostOnce(addr, name, "Signal timeout")
                     break
+                }
+                synchronized(connectionLock) {
+                    if (writeInFlight && now - lastWriteDispatchMs > 3_000L) {
+                        writeInFlight = false
+                    }
                 }
                 if (!requestedInitialCells) {
                     requestedInitialCells = true
@@ -485,6 +597,28 @@ class JkBleManager(
     }
 
     private fun writeReadCommand(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        command: ByteArray
+    ): Boolean {
+        synchronized(connectionLock) {
+            if (gatt !== activeGatt || writeChar !== characteristic) return false
+            if (writeInFlight) {
+                if (writeQueue.size < 4) {
+                    writeQueue.addLast(command)
+                }
+                return true
+            }
+            val started = performGattWrite(gatt, characteristic, command)
+            if (started) {
+                writeInFlight = true
+                lastWriteDispatchMs = System.currentTimeMillis()
+            }
+            return started
+        }
+    }
+
+    private fun performGattWrite(
         gatt: BluetoothGatt,
         characteristic: BluetoothGattCharacteristic,
         command: ByteArray

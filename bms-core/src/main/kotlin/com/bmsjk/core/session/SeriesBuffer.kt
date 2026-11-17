@@ -37,11 +37,16 @@ data class MetricStats(
 )
 
 /**
- * Bounded in-memory time-series buffer for lightweight Canvas charts.
+ * Thread-safe bounded in-memory time-series buffer for lightweight Canvas charts.
  */
 class SeriesBuffer(
     private val maxSamples: Int = 7_200
 ) {
+    init {
+        require(maxSamples > 0) { "maxSamples must be > 0, was $maxSamples" }
+    }
+
+    private val lock = Any()
     private val samples = ArrayDeque<TrendSample>(minOf(maxSamples, 512))
 
     fun append(telemetry: BmsTelemetry) {
@@ -56,23 +61,28 @@ class SeriesBuffer(
             mosfetTempC = telemetry.mosfetTempC,
             maxTempC = telemetry.maxTemperatureC
         )
-        if (samples.size >= maxSamples) {
-            samples.removeFirst()
+        synchronized(lock) {
+            if (samples.size >= maxSamples) {
+                samples.removeFirst()
+            }
+            samples.addLast(sample)
         }
-        samples.addLast(sample)
     }
 
     fun clear() {
-        samples.clear()
+        synchronized(lock) {
+            samples.clear()
+        }
     }
 
-    fun size(): Int = samples.size
+    fun size(): Int = synchronized(lock) { samples.size }
 
-    fun query(window: ChartWindow, nowMs: Long = System.currentTimeMillis()): List<TrendSample> {
-        val duration = window.durationMs ?: return samples.toList()
-        val cutoff = nowMs - duration
-        return samples.filter { it.timestampMs >= cutoff }
-    }
+    fun query(window: ChartWindow, nowMs: Long = System.currentTimeMillis()): List<TrendSample> =
+        synchronized(lock) {
+            val duration = window.durationMs ?: return samples.toList()
+            val cutoff = nowMs - duration
+            samples.filter { it.timestampMs >= cutoff }
+        }
 
     fun statsFor(
         metric: ChartMetric,
@@ -87,7 +97,7 @@ class SeriesBuffer(
                 ChartMetric.DELTA_MV -> sample.deltaCellMv
                 ChartMetric.MAX_TEMPERATURE -> sample.maxTempC
             }
-        }
+        }.filter { it.isFinite() }
         if (values.isEmpty()) return MetricStats(null, null, null, null)
 
         var min = Float.MAX_VALUE

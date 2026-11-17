@@ -112,8 +112,9 @@ fun PowerArcCanvas(
     height: Dp = 54.dp,
     maxCurrentRefA: Float = 60f
 ) {
-    val cur = currentA ?: 0f
-    val pwr = powerW ?: 0f
+    val finiteCur = currentA?.takeIf { it.isFinite() }
+    val finitePower = powerW?.takeIf { it.isFinite() }
+    val cur = finiteCur ?: 0f
     val ratio = (abs(cur) / maxCurrentRefA.coerceAtLeast(1f)).coerceIn(0f, 1f)
     val arcColor = when {
         cur > 0.2f -> OledTokens.ChargeGreen
@@ -161,7 +162,7 @@ fun PowerArcCanvas(
             modifier = Modifier.padding(bottom = 2.dp)
         ) {
             Text(
-                text = currentA?.let {
+                text = finiteCur?.let {
                     String.format(Locale.US, "%s%.1fA", if (it >= 0f) "+" else "", it)
                 } ?: "--A",
                 style = monoStyle(
@@ -171,7 +172,7 @@ fun PowerArcCanvas(
                 )
             )
             Text(
-                text = powerW?.let {
+                text = finitePower?.let {
                     val w = it.roundToInt()
                     "${if (w >= 0) "+" else ""}${w}W"
                 } ?: "--W",

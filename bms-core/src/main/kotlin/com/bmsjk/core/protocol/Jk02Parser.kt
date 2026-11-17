@@ -8,8 +8,8 @@ object Jk02Parser {
 
     fun parseDeviceInfo(data: ByteArray): DeviceInfo {
         val rawMfg = ByteReader.cString(data, 78, 8)
-        val formattedMfg = if (rawMfg.length >= 6 && rawMfg.take(6).all { it.isDigit() }) {
-            "20${rawMfg.take(6)}"
+        val formattedMfg = if (rawMfg.length == 6 && rawMfg.all { it.isDigit() }) {
+            "20$rawMfg"
         } else {
             rawMfg
         }

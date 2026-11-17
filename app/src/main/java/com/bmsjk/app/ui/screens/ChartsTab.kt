@@ -89,32 +89,28 @@ fun ChartsTab(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (window in ChartWindow.entries) {
-                        ChartChip(
-                            label = AppStrings.windowLabel(window, state.language),
-                            selected = state.chartWindow == window,
-                            onClick = { onSelectWindow(window) }
-                        )
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (window in ChartWindow.entries) {
                     ChartChip(
-                        label = if (state.session.chartRecordingPaused) strings.resume else strings.pause,
-                        selected = state.session.chartRecordingPaused,
-                        onClick = onTogglePaused
-                    )
-                    ChartChip(
-                        label = strings.clear,
-                        selected = false,
-                        onClick = onClearHistory
+                        label = AppStrings.windowLabel(window, state.language),
+                        selected = state.chartWindow == window,
+                        onClick = { onSelectWindow(window) }
                     )
                 }
+                ChartChip(
+                    label = if (state.session.chartRecordingPaused) strings.resume else strings.pause,
+                    selected = state.session.chartRecordingPaused,
+                    onClick = onTogglePaused
+                )
+                ChartChip(
+                    label = strings.clear,
+                    selected = false,
+                    onClick = onClearHistory
+                )
             }
         }
 

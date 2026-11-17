@@ -25,19 +25,32 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import com.bmsjk.app.ble.BleConnectionState
 import com.bmsjk.app.ble.BleDeviceItem
 import com.bmsjk.app.ui.components.AppIcons
@@ -52,6 +65,7 @@ import com.bmsjk.app.viewmodel.BmsUiState
 import com.bmsjk.core.protocol.ProtocolMode
 import com.bmsjk.core.session.ChartMetric
 import com.bmsjk.core.session.ChartWindow
+import com.bmsjk.core.session.PasscodeStatus
 
 @Composable
 fun DashboardShell(
@@ -106,6 +120,16 @@ fun DashboardShell(
                     onToggleCells = onToggleHudCells,
                     onGoToConnect = { onSelectTab(AppTab.CONNECT) }
                 )
+                val passStatus = state.session.passcodeStatus
+                if (passStatus is PasscodeStatus.Required || passStatus is PasscodeStatus.Mismatch) {
+                    HudPasscodeDialog(
+                        isMismatch = passStatus is PasscodeStatus.Mismatch,
+                        deviceAddress = state.session.deviceAddress,
+                        strings = strings,
+                        onSubmit = onSubmitPasscode,
+                        onDisconnect = onDisconnect
+                    )
+                }
                 return@BoxWithConstraints
             }
 
@@ -216,6 +240,73 @@ fun DashboardShell(
             )
         }
     }
+}
+
+@Composable
+private fun HudPasscodeDialog(
+    isMismatch: Boolean,
+    deviceAddress: String?,
+    strings: UiStrings,
+    onSubmit: (String) -> Unit,
+    onDisconnect: () -> Unit
+) {
+    var code by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(deviceAddress) {
+        code = ""
+    }
+    AlertDialog(
+        onDismissRequest = onDisconnect,
+        containerColor = OledTokens.Card,
+        titleContentColor = OledTokens.Text,
+        textContentColor = OledTokens.Muted,
+        title = {
+            Text(text = strings.passcodeTitle, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = if (isMismatch) strings.passcodeWrong else strings.passcodeDesc,
+                    color = if (isMismatch) OledTokens.DangerRed else OledTokens.Muted,
+                    fontSize = 11.sp
+                )
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    placeholder = { Text(strings.passcodeHint, color = OledTokens.Muted, fontSize = 12.sp) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { onSubmit(code) }),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = OledTokens.Accent,
+                        unfocusedBorderColor = OledTokens.CardBorder,
+                        focusedTextColor = OledTokens.Text,
+                        unfocusedTextColor = OledTokens.Text
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(code) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OledTokens.Accent,
+                    contentColor = Color.Black
+                )
+            ) {
+                Text(strings.confirmPasscode, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDisconnect) {
+                Text(strings.disconnect, color = OledTokens.Muted)
+            }
+        }
+    )
 }
 
 @Composable
